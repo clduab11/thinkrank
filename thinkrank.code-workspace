@@ -1,0 +1,155 @@
+{
+  "folders": [
+    {
+      "name": "Root",
+      "path": "."
+    },
+    {
+      "name": "Unity Client",
+      "path": "./client/unity-project"
+    },
+    {
+      "name": "Auth Service",
+      "path": "./backend/services/auth-service"
+    },
+    {
+      "name": "Game Service",
+      "path": "./backend/services/game-service"
+    },
+    {
+      "name": "AI Research Service",
+      "path": "./backend/services/ai-research-service"
+    },
+    {
+      "name": "Social Service",
+      "path": "./backend/services/social-service"
+    },
+    {
+      "name": "Analytics Service",
+      "path": "./backend/services/analytics-service"
+    },
+    {
+      "name": "API Gateway",
+      "path": "./backend/services/api-gateway"
+    },
+    {
+      "name": "Shared Backend",
+      "path": "./backend/shared"
+    },
+    {
+      "name": "Infrastructure",
+      "path": "./infrastructure"
+    },
+    {
+      "name": "Deployment",
+      "path": "./deployment"
+    },
+    {
+      "name": "Documentation",
+      "path": "./documentation"
+    }
+  ],
+  "settings": {
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": true
+    },
+    "supabase.showInlineErrors": true,
+    "unity.editorPath": "/Applications/Unity/Hub/Editor/2023.3.0f1/Unity.app"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-vscode.vscode-typescript-next",
+      "esbenp.prettier-vscode",
+      "ms-vscode.vscode-eslint",
+      "ms-kubernetes-tools.vscode-kubernetes-tools",
+      "hashicorp.terraform",
+      "ms-azuretools.vscode-docker",
+      "tobiah.unity-tools",
+      "kleber-swf.unity-code-snippets",
+      "visualstudiotoolsforunity.vstuc",
+      "supabase.supabase"
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Debug Auth Service",
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/backend/services/auth-service/src/index.ts",
+        "outFiles": ["${workspaceFolder}/backend/services/auth-service/dist/**/*.js"],
+        "runtimeArgs": ["-r", "ts-node/register"],
+        "env": {
+          "NODE_ENV": "development"
+        }
+      },
+      {
+        "name": "Debug Game Service",
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/backend/services/game-service/src/index.ts",
+        "outFiles": ["${workspaceFolder}/backend/services/game-service/dist/**/*.js"],
+        "runtimeArgs": ["-r", "ts-node/register"],
+        "env": {
+          "NODE_ENV": "development"
+        }
+      }
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build All Services",
+        "type": "shell",
+        "command": "npm run build",
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        }
+      },
+      {
+        "label": "Start Development Environment",
+        "type": "shell",
+        "command": "npm run dev",
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        }
+      },
+      {
+        "label": "Run Tests",
+        "type": "shell",
+        "command": "npm test",
+        "group": "test",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        }
+      },
+      {
+        "label": "Unity Build iOS",
+        "type": "shell",
+        "command": "./client/build-scripts/build-ios.sh",
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,97 @@
+module.exports = {
+  projects: [
+    {
+      displayName: 'Auth Service',
+      testMatch: ['<rootDir>/backend/services/auth-service/**/*.test.ts'],
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      collectCoverageFrom: [
+        'backend/services/auth-service/src/**/*.ts',
+        '!backend/services/auth-service/src/**/*.d.ts',
+      ],
+      coverageDirectory: 'backend/services/auth-service/coverage',
+      coverageReporters: ['text', 'lcov', 'html'],
+    },
+    {
+      displayName: 'Game Service',
+      testMatch: ['<rootDir>/backend/services/game-service/**/*.test.ts'],
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      collectCoverageFrom: [
+        'backend/services/game-service/src/**/*.ts',
+        '!backend/services/game-service/src/**/*.d.ts',
+      ],
+      coverageDirectory: 'backend/services/game-service/coverage',
+      coverageReporters: ['text', 'lcov', 'html'],
+    },
+    {
+      displayName: 'AI Research Service',
+      testMatch: ['<rootDir>/backend/services/ai-research-service/**/*.test.ts'],
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      collectCoverageFrom: [
+        'backend/services/ai-research-service/src/**/*.ts',
+        '!backend/services/ai-research-service/src/**/*.d.ts',
+      ],
+      coverageDirectory: 'backend/services/ai-research-service/coverage',
+      coverageReporters: ['text', 'lcov', 'html'],
+    },
+    {
+      displayName: 'Social Service',
+      testMatch: ['<rootDir>/backend/services/social-service/**/*.test.ts'],
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      collectCoverageFrom: [
+        'backend/services/social-service/src/**/*.ts',
+        '!backend/services/social-service/src/**/*.d.ts',
+      ],
+      coverageDirectory: 'backend/services/social-service/coverage',
+      coverageReporters: ['text', 'lcov', 'html'],
+    },
+    {
+      displayName: 'Analytics Service',
+      testMatch: ['<rootDir>/backend/services/analytics-service/**/*.test.ts'],
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      collectCoverageFrom: [
+        'backend/services/analytics-service/src/**/*.ts',
+        '!backend/services/analytics-service/src/**/*.d.ts',
+      ],
+      coverageDirectory: 'backend/services/analytics-service/coverage',
+      coverageReporters: ['text', 'lcov', 'html'],
+    },
+    {
+      displayName: 'API Gateway',
+      testMatch: ['<rootDir>/backend/services/api-gateway/**/*.test.ts'],
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      collectCoverageFrom: [
+        'backend/services/api-gateway/src/**/*.ts',
+        '!backend/services/api-gateway/src/**/*.d.ts',
+      ],
+      coverageDirectory: 'backend/services/api-gateway/coverage',
+      coverageReporters: ['text', 'lcov', 'html'],
+    },
+    {
+      displayName: 'Shared',
+      testMatch: ['<rootDir>/backend/shared/**/*.test.ts'],
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      collectCoverageFrom: [
+        'backend/shared/src/**/*.ts',
+        '!backend/shared/src/**/*.d.ts',
+      ],
+      coverageDirectory: 'backend/shared/coverage',
+      coverageReporters: ['text', 'lcov', 'html'],
+    },
+  ],
+  collectCoverageFrom: [
+    'backend/**/*.ts',
+    '!backend/**/*.d.ts',
+    '!backend/**/node_modules/**',
+    '!backend/**/dist/**',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
+  testTimeout: 30000,
+};

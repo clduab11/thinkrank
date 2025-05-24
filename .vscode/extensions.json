@@ -1,0 +1,23 @@
+{
+  "recommendations": [
+    "ms-vscode.vscode-typescript-next",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-eslint",
+    "ms-kubernetes-tools.vscode-kubernetes-tools",
+    "hashicorp.terraform",
+    "ms-azuretools.vscode-docker",
+    "tobiah.unity-tools",
+    "kleber-swf.unity-code-snippets",
+    "visualstudiotoolsforunity.vstuc",
+    "supabase.supabase",
+    "bradlc.vscode-tailwindcss",
+    "ms-vscode.vscode-json",
+    "redhat.vscode-yaml",
+    "ms-python.python",
+    "github.vscode-github-actions",
+    "ms-vscode-remote.remote-containers"
+  ],
+  "unwantedRecommendations": [
+    "ms-vscode.vscode-typescript"
+  ]
+}

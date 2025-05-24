@@ -1,0 +1,83 @@
+{
+  "name": "thinkrank",
+  "version": "1.0.0",
+  "description": "ThinkRank - AI Research Gaming Platform",
+  "private": true,
+  "workspaces": [
+    "backend/services/*",
+    "backend/shared"
+  ],
+  "scripts": {
+    "build": "npm run build:backend",
+    "build:backend": "npm run build --workspaces --if-present",
+    "dev": "npm run dev:backend",
+    "dev:backend": "concurrently \"npm run dev --workspace=backend/services/auth-service\" \"npm run dev --workspace=backend/services/game-service\" \"npm run dev --workspace=backend/services/ai-research-service\" \"npm run dev --workspace=backend/services/social-service\" \"npm run dev --workspace=backend/services/analytics-service\" \"npm run dev --workspace=backend/services/api-gateway\"",
+    "test": "npm run test --workspaces --if-present",
+    "test:integration": "npm run test:integration --workspaces --if-present",
+    "test:performance": "npm run test:performance --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "format": "prettier --write \"**/*.{js,ts,json,md}\"",
+    "format:check": "prettier --check \"**/*.{js,ts,json,md}\"",
+    "docker:build": "docker-compose -f infrastructure/docker/docker-compose.yml build",
+    "docker:up": "docker-compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f infrastructure/docker/docker-compose.yml down",
+    "k8s:apply": "kubectl apply -k infrastructure/kubernetes/overlays/dev",
+    "k8s:delete": "kubectl delete -k infrastructure/kubernetes/overlays/dev",
+    "terraform:init": "cd infrastructure/terraform && terraform init",
+    "terraform:plan": "cd infrastructure/terraform && terraform plan",
+    "terraform:apply": "cd infrastructure/terraform && terraform apply",
+    "unity:build:ios": "./client/build-scripts/build-ios.sh",
+    "unity:build:android": "./client/build-scripts/build-android.sh",
+    "setup": "npm install && npm run build",
+    "clean": "npm run clean --workspaces --if-present && rm -rf node_modules",
+    "postinstall": "husky install"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.12.0",
+    "@typescript-eslint/parser": "^6.12.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.1.0",
+    "prettier": "^3.1.0",
+    "typescript": "^5.3.2"
+  },
+  "lint-staged": {
+    "*.{js,ts}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm run test"
+    }
+  },
+  "engines": {
+    "node": ">=20.10.0",
+    "npm": ">=10.2.0"
+  },
+  "keywords": [
+    "ai",
+    "research",
+    "gaming",
+    "unity",
+    "mobile",
+    "typescript",
+    "supabase",
+    "aws"
+  ],
+  "author": "ThinkRank Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thinkrank/thinkrank.git"
+  }
+}
