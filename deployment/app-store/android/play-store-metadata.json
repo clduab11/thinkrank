@@ -1,0 +1,192 @@
+{
+  "packageName": "com.thinkrank.app",
+  "defaultLanguage": "en-US",
+  "appDetails": {
+    "title": "ThinkRank: AI Research Games",
+    "shortDescription": "Contribute to AI safety through engaging research games",
+    "fullDescription": "🧠 JOIN THE AI SAFETY REVOLUTION THROUGH GAMING\n\nThinkRank transforms complex AI alignment and bias detection challenges into accessible, entertaining games that make real contributions to artificial intelligence safety research.\n\nEvery game you play, every decision you make, contributes to making AI systems safer and more aligned with human values.\n\n🎮 ENGAGING RESEARCH GAMES\n• Bias Detection Games: Identify and analyze biases in AI datasets and outputs\n• AI Alignment Challenges: Help align AI systems with human values and intentions\n• Context Evaluation: Assess AI responses across various real-world scenarios\n• Safety Analysis: Contribute to critical AI safety research initiatives\n• Data Quality Assessment: Help improve training datasets for AI systems\n\n🏆 COMPETITIVE SOCIAL FEATURES\n• Global leaderboards showcasing top researchers\n• Team up with friends for collaborative research projects\n• Share achievements and scientific discoveries\n• Join specialized research communities\n• Compete in research tournaments and challenges\n\n📊 TRACK YOUR RESEARCH IMPACT\n• See how your contributions advance real AI safety research\n• Detailed analytics on your research progress and accuracy\n• Achievement system with meaningful scientific milestones\n• Real-time feedback on research quality and impact\n• Direct citations in published research papers\n\n🔬 RIGOROUS SCIENTIFIC METHODOLOGY\n• All games based on peer-reviewed research problems\n• Contributions reviewed by AI safety experts and researchers\n• Direct impact on AI safety initiatives at leading institutions\n• Transparent methodology and published results\n• Regular updates with latest research challenges\n\n💡 EDUCATIONAL VALUE & SKILL DEVELOPMENT\n• Learn about AI safety, alignment, and bias detection\n• Understand machine learning and neural network concepts\n• Develop critical thinking and analytical skills\n• Gain insights into AI development challenges\n• Contribute to meaningful scientific research\n\n🌟 FOR EVERYONE - FROM CURIOUS MINDS TO EXPERTS\nWhether you're an AI researcher, computer science student, educator, or simply curious about artificial intelligence, ThinkRank offers an engaging way to contribute to one of the most important challenges of our time.\n\n🚀 PREMIUM FEATURES\n• Unlimited access to all research games\n• Advanced analytics and detailed performance insights\n• Priority access to new research challenges\n• Exclusive educational content and tutorials\n• Direct communication with research teams\n• Early access to beta features\n\n🔒 PRIVACY & SECURITY\n• Your privacy is our priority - see our comprehensive privacy policy\n• Secure data handling with enterprise-grade encryption\n• Transparent data usage for research purposes only\n• Full GDPR compliance and user control\n\nDownload ThinkRank now and start making a real difference in AI safety research while having fun!\n\n#AIResearch #ArtificialIntelligence #Gaming #Education #Science #Research #AIAlignment #BaisDetection",
+    "videoUrl": "https://www.youtube.com/watch?v=your-trailer-video-id",
+    "websiteUrl": "https://thinkrank.app",
+    "emailAddress": "support@thinkrank.app",
+    "phoneNumber": "+1-555-THINK-AI",
+    "privacyPolicyUrl": "https://thinkrank.app/privacy",
+    "categoryId": "EDUCATION",
+    "contentRating": "EVERYONE",
+    "targetAgeGroup": "AGE_GROUP_13_17"
+  },
+  "pricing": {
+    "type": "freemium",
+    "subscriptions": [
+      {
+        "basePlanId": "premium-monthly",
+        "offerId": "premium-monthly-launch",
+        "name": "Premium Monthly",
+        "price": "$9.99",
+        "pricingPhases": [
+          {
+            "duration": "P1M",
+            "price": "$9.99",
+            "recurrenceMode": "FINITE_RECURRING",
+            "billingCycleCount": 1
+          }
+        ],
+        "benefits": [
+          "Unlimited research games",
+          "Advanced analytics",
+          "Priority research assignments",
+          "Exclusive educational content",
+          "Ad-free experience"
+        ]
+      },
+      {
+        "basePlanId": "premium-yearly",
+        "offerId": "premium-yearly-launch",
+        "name": "Premium Yearly",
+        "price": "$99.99",
+        "pricingPhases": [
+          {
+            "duration": "P1Y",
+            "price": "$99.99",
+            "recurrenceMode": "FINITE_RECURRING",
+            "billingCycleCount": 1
+          }
+        ],
+        "benefits": [
+          "All Premium Monthly features",
+          "2 months free (17% savings)",
+          "Early access to new research",
+          "Direct researcher contact",
+          "Exclusive beta features"
+        ]
+      }
+    ]
+  },
+  "screenshots": {
+    "phone": [
+      {
+        "filename": "phone_01_main_menu.png",
+        "description": "Main menu showcasing available research games and user progress"
+      },
+      {
+        "filename": "phone_02_bias_detection.png",
+        "description": "Bias detection game interface with real AI training data analysis"
+      },
+      {
+        "filename": "phone_03_alignment_challenge.png",
+        "description": "AI alignment challenge demonstrating value alignment scenarios"
+      },
+      {
+        "filename": "phone_04_leaderboard.png",
+        "description": "Global leaderboard showing top researchers and their contributions"
+      },
+      {
+        "filename": "phone_05_achievements.png",
+        "description": "Achievement system tracking research milestones and contributions"
+      },
+      {
+        "filename": "phone_06_research_impact.png",
+        "description": "Research impact dashboard showing real-world contributions"
+      },
+      {
+        "filename": "phone_07_social_features.png",
+        "description": "Social features enabling collaboration and knowledge sharing"
+      },
+      {
+        "filename": "phone_08_analytics.png",
+        "description": "Detailed analytics and performance insights for premium users"
+      }
+    ],
+    "tablet": [
+      {
+        "filename": "tablet_01_main_interface.png",
+        "description": "Tablet-optimized main interface with enhanced research tools"
+      },
+      {
+        "filename": "tablet_02_collaborative_research.png",
+        "description": "Collaborative research interface for team-based challenges"
+      },
+      {
+        "filename": "tablet_03_advanced_analytics.png",
+        "description": "Advanced analytics dashboard with detailed research metrics"
+      }
+    ],
+    "tv": [
+      {
+        "filename": "tv_01_presentation_mode.png",
+        "description": "Presentation mode for educational settings and group research"
+      }
+    ]
+  },
+  "graphics": {
+    "icon": "ic_launcher.png",
+    "featureGraphic": "feature_graphic.png",
+    "promoGraphic": "promo_graphic.png",
+    "tvBanner": "tv_banner.png"
+  },
+  "releaseNotes": {
+    "en-US": "🎉 Welcome to ThinkRank v1.0!\n\n🧠 NEW FEATURES:\n• Launch of bias detection research games\n• AI alignment challenge system\n• Global leaderboards and social features\n• Achievement system with research milestones\n• Real-time research contribution tracking\n• Educational content and AI safety tutorials\n• Premium subscription with advanced features\n\n🔬 RESEARCH INTEGRATION:\n• Direct contribution to AI safety research\n• Partnership with leading AI research institutions\n• Peer-reviewed problem sets and challenges\n• Transparent impact tracking and reporting\n\n🏆 GAMIFICATION:\n• Competitive research tournaments\n• Team collaboration features\n• Achievement badges and recognition system\n• Progress tracking and skill development\n\n🔒 PRIVACY & SECURITY:\n• Enterprise-grade data protection\n• GDPR compliance and user control\n• Transparent research data usage\n• Secure authentication and encryption\n\nJoin thousands of researchers making AI safer through engaging games!\n\nReport issues: support@thinkrank.app\nJoin our community: https://community.thinkrank.app"
+  },
+  "testingInstructions": {
+    "internalTestingNotes": "ThinkRank is a research-focused gaming platform for AI safety. Key testing areas:\n\n1. GAME MECHANICS:\n   - Test all research game types (bias detection, alignment, context evaluation)\n   - Verify scoring accuracy and feedback systems\n   - Check tutorial flows and onboarding\n\n2. SOCIAL FEATURES:\n   - Test leaderboard updates and rankings\n   - Verify friend/team collaboration features\n   - Check achievement unlocking and notifications\n\n3. SUBSCRIPTION:\n   - Test premium subscription flow\n   - Verify feature unlocking and access controls\n   - Check billing integration and cancellation\n\n4. PERFORMANCE:\n   - Ensure 60fps during gameplay\n   - Test on various device configurations\n   - Verify offline/online mode transitions\n\n5. ACCOUNT MANAGEMENT:\n   - Test registration, login, password reset flows\n   - Verify data sync across devices\n   - Check account deletion and data export\n\nTest credentials:\nEmail: reviewer@thinkrank.app\nPassword: PlayStoreReview2024!\n\nAll research games are based on real AI safety problems and contributions are validated by research teams."
+  },
+  "distributionChannels": {
+    "countries": [
+      "US", "CA", "GB", "DE", "FR", "IT", "ES", "NL", "BE", "CH", "AT", "SE", "NO", "DK", "FI", "IE", "PT", "AU", "NZ", "JP", "KR", "SG", "HK", "TW"
+    ],
+    "excludedCountries": [],
+    "staged_rollout": {
+      "enabled": true,
+      "percentage": 5,
+      "schedule": [
+        { "percentage": 5, "duration": "P3D" },
+        { "percentage": 10, "duration": "P3D" },
+        { "percentage": 20, "duration": "P3D" },
+        { "percentage": 50, "duration": "P7D" },
+        { "percentage": 100, "duration": "unlimited" }
+      ]
+    }
+  },
+  "contentRating": {
+    "questionnaire": {
+      "violenceCategory": "NONE",
+      "sexualContentCategory": "NONE",
+      "profanityCategory": "NONE",
+      "drugsCategory": "NONE",
+      "gamblingCategory": "NONE",
+      "userGeneratedContent": false,
+      "socialInteraction": true,
+      "sharesLocation": false,
+      "digitalPurchases": true,
+      "adsCategory": "NONE"
+    }
+  },
+  "dataHandling": {
+    "dataTypes": [
+      {
+        "type": "PERSONAL_INFO",
+        "categories": ["NAME", "EMAIL_ADDRESS"],
+        "purposes": ["ACCOUNT_MANAGEMENT", "ANALYTICS"],
+        "optional": false
+      },
+      {
+        "type": "APP_ACTIVITY",
+        "categories": ["APP_INTERACTIONS", "IN_APP_SEARCH_HISTORY", "INSTALLED_APPS"],
+        "purposes": ["ANALYTICS", "PERSONALIZATION"],
+        "optional": true
+      },
+      {
+        "type": "DEVICE_INFO",
+        "categories": ["DEVICE_PERFORMANCE", "OTHER_DEVICE_IDS"],
+        "purposes": ["ANALYTICS", "FRAUD_PREVENTION"],
+        "optional": false
+      }
+    ],
+    "securityPractices": {
+      "dataEncryptedInTransit": true,
+      "dataEncryptedAtRest": true,
+      "userCanRequestDeletion": true,
+      "dataNotSold": true,
+      "independentSecurityReview": true
+    }
+  }
+}

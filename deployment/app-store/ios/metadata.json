@@ -1,0 +1,166 @@
+{
+  "appInfo": {
+    "name": "ThinkRank: AI Research Games",
+    "bundleId": "com.thinkrank.app",
+    "version": "1.0.0",
+    "buildNumber": "1",
+    "category": "Education",
+    "contentRating": "4+"
+  },
+  "localizations": {
+    "en-US": {
+      "name": "ThinkRank: AI Research Games",
+      "subtitle": "Contribute to AI safety through engaging research games",
+      "description": "Join the fight for AI safety through engaging, gamified research experiences.\n\nThinkRank transforms complex AI alignment and bias detection challenges into accessible, entertaining games that make real contributions to artificial intelligence safety research.\n\n🧠 RESEARCH GAMES\n• Bias Detection: Identify and analyze biases in AI datasets\n• Alignment Challenges: Help align AI systems with human values\n• Context Evaluation: Assess AI responses in various scenarios\n• Safety Analysis: Contribute to AI safety research initiatives\n\n🏆 SOCIAL FEATURES\n• Global leaderboards and rankings\n• Team up with friends for collaborative research\n• Share achievements and discoveries\n• Join research communities\n\n📊 TRACK YOUR IMPACT\n• See how your contributions advance AI safety\n• Detailed analytics on your research progress\n• Achievement system with meaningful rewards\n• Real-time feedback on research quality\n\n🔬 SCIENTIFIC RIGOR\n• All games based on real research problems\n• Contributions reviewed by AI safety experts\n• Direct impact on AI safety initiatives\n• Transparent methodology and results\n\n💡 EDUCATIONAL VALUE\n• Learn about AI safety and alignment\n• Understand bias in machine learning\n• Develop critical thinking skills\n• Contribute to meaningful research\n\nWhether you're an AI researcher, student, or simply curious about artificial intelligence, ThinkRank offers an engaging way to contribute to one of the most important challenges of our time.\n\nDownload now and start making a difference in AI safety research!",
+      "keywords": "AI,artificial intelligence,research,games,safety,bias detection,alignment,education,science,machine learning",
+      "releaseNotes": "🎉 Welcome to ThinkRank!\n\n• Launch of bias detection games\n• AI alignment challenges\n• Social features and leaderboards\n• Achievement system\n• Real-time research contributions\n• Educational content and tutorials\n\nJoin thousands of researchers making AI safer through games!",
+      "marketingUrl": "https://thinkrank.app",
+      "supportUrl": "https://support.thinkrank.app",
+      "privacyPolicyUrl": "https://thinkrank.app/privacy"
+    }
+  },
+  "pricing": {
+    "basePlan": "freemium",
+    "subscriptions": [
+      {
+        "productId": "premium_monthly",
+        "name": "Premium Monthly",
+        "price": "$9.99",
+        "duration": "P1M",
+        "features": [
+          "Unlimited research games",
+          "Advanced analytics",
+          "Priority research assignments",
+          "Exclusive content"
+        ]
+      },
+      {
+        "productId": "premium_yearly",
+        "name": "Premium Yearly",
+        "price": "$99.99",
+        "duration": "P1Y",
+        "features": [
+          "All Premium Monthly features",
+          "2 months free",
+          "Early access to new research",
+          "Direct researcher contact"
+        ]
+      }
+    ]
+  },
+  "deviceRequirements": {
+    "minimumOSVersion": "14.0",
+    "deviceCapabilities": [
+      "armv7",
+      "arm64"
+    ],
+    "supportedDevices": [
+      "iPhone6s",
+      "iPhone6sPlus",
+      "iPhoneSE",
+      "iPhone7",
+      "iPhone7Plus",
+      "iPhone8",
+      "iPhone8Plus",
+      "iPhoneX",
+      "iPhoneXS",
+      "iPhoneXSMax",
+      "iPhoneXR",
+      "iPhone11",
+      "iPhone11Pro",
+      "iPhone11ProMax",
+      "iPhone12mini",
+      "iPhone12",
+      "iPhone12Pro",
+      "iPhone12ProMax",
+      "iPhone13mini",
+      "iPhone13",
+      "iPhone13Pro",
+      "iPhone13ProMax",
+      "iPhone14",
+      "iPhone14Plus",
+      "iPhone14Pro",
+      "iPhone14ProMax",
+      "iPhone15",
+      "iPhone15Plus",
+      "iPhone15Pro",
+      "iPhone15ProMax"
+    ]
+  },
+  "screenshots": {
+    "iPhone6.5": [
+      {
+        "filename": "iPhone_6.5_01_main_menu.png",
+        "displayTarget": "iOS-6.5-in"
+      },
+      {
+        "filename": "iPhone_6.5_02_game_interface.png",
+        "displayTarget": "iOS-6.5-in"
+      },
+      {
+        "filename": "iPhone_6.5_03_bias_detection.png",
+        "displayTarget": "iOS-6.5-in"
+      },
+      {
+        "filename": "iPhone_6.5_04_leaderboard.png",
+        "displayTarget": "iOS-6.5-in"
+      },
+      {
+        "filename": "iPhone_6.5_05_achievements.png",
+        "displayTarget": "iOS-6.5-in"
+      }
+    ],
+    "iPhone5.5": [
+      {
+        "filename": "iPhone_5.5_01_main_menu.png",
+        "displayTarget": "iOS-5.5-in"
+      },
+      {
+        "filename": "iPhone_5.5_02_game_interface.png",
+        "displayTarget": "iOS-5.5-in"
+      },
+      {
+        "filename": "iPhone_5.5_03_bias_detection.png",
+        "displayTarget": "iOS-5.5-in"
+      },
+      {
+        "filename": "iPhone_5.5_04_leaderboard.png",
+        "displayTarget": "iOS-5.5-in"
+      },
+      {
+        "filename": "iPhone_5.5_05_achievements.png",
+        "displayTarget": "iOS-5.5-in"
+      }
+    ]
+  },
+  "appPreview": {
+    "iPhone6.5": [
+      {
+        "filename": "iPhone_6.5_preview.mp4",
+        "displayTarget": "iOS-6.5-in"
+      }
+    ]
+  },
+  "appReviewInformation": {
+    "contact": {
+      "firstName": "Support",
+      "lastName": "Team",
+      "phoneNumber": "+1-555-0123",
+      "email": "appstore@thinkrank.app"
+    },
+    "demoAccount": {
+      "username": "reviewer@thinkrank.app",
+      "password": "ReviewerAccess2024!"
+    },
+    "notes": "ThinkRank is a research-focused gaming platform that contributes to AI safety research. The app includes:\n\n1. Educational games based on real AI research problems\n2. Social features for collaborative research\n3. Subscription model for premium features\n4. All research contributions are reviewed by experts\n5. No user-generated content that requires moderation\n6. Appropriate for ages 13+ due to complex subject matter\n\nDemo account provides access to all features. The app requires internet connection for research data synchronization."
+  },
+  "exportCompliance": {
+    "usesEncryption": true,
+    "encryptionUpdated": true,
+    "encryptionExempt": false,
+    "containsProprietaryCryptography": false,
+    "containsThirdPartyCryptography": false,
+    "availableOnFrenchStore": true,
+    "platform": "ios"
+  }
+}
