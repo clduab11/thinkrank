@@ -349,21 +349,9 @@ ThinkRank exists because of the groundbreaking work and visionary thinking of se
 
 #### McGill University
 
-We extend our deepest gratitude to **McGill University**, whose commitment to academic excellence and innovative research methodologies has been instrumental in shaping the conceptual framework of ThinkRank. The university's pioneering work in artificial intelligence research, computational biology, and human-computer interaction has provided the theoretical foundation upon which our platform is built.
+I would like to extend my heartfelt gratitude to McGill University for your remarkable work in hosting Phylo, found at https://phylo.cs.mcgill.ca/. Your innovative approach and dedication to advancing scientific understanding through engaging, accessible platforms have been truly inspiring.
 
-McGill's dedication to interdisciplinary collaboration and their emphasis on making complex research accessible to broader audiences directly influenced our mission to democratize AI research participation. The university's research culture, which values both rigorous scientific methodology and creative problem-solving approaches, is reflected in every aspect of ThinkRank's design philosophy.
-
-The innovative pedagogical approaches developed at McGill, particularly their work in active learning and student engagement in research, have been crucial in informing our gamification strategies and educational content development. Their commitment to fostering critical thinking skills and scientific literacy among students has inspired our approach to designing challenges that not only engage users but also develop essential analytical capabilities.
-
-#### The Phylo Project
-
-The **Phylo project** deserves special recognition as a transformative influence on ThinkRank's development philosophy and methodology. This groundbreaking initiative demonstrated the immense potential of gamification in advancing scientific research while making complex computational problems accessible to the general public.
-
-Phylo's innovative approach to crowdsourcing bioinformatics research through puzzle-based gameplay provided a blueprint for how we could apply similar methodologies to AI research challenges. Their success in engaging players to contribute meaningfully to multiple sequence alignment problems while enjoying an entertaining gaming experience directly inspired our bias detection and research contribution mechanics.
-
-The Phylo project's elegant solution to the challenge of translating complex scientific problems into intuitive, engaging game mechanics has been a constant source of inspiration throughout ThinkRank's development. Their demonstration that players could achieve results comparable to sophisticated algorithms while having fun proved that the intersection of gaming and research could yield unprecedented benefits for both scientific advancement and public education.
-
-Most importantly, Phylo showed us that when people are given the right tools and motivation, they can contribute significantly to solving some of the world's most complex problems. This insight became a cornerstone of ThinkRank's mission to revolutionize how we approach collaborative thinking and problem-solving in the AI research domain.
+Phylo has not only showcased the power of combining education with interactive design but has also served as the foundational inspiration for the development of ThinkRank. The creativity and commitment evident in Phylo have propelled our efforts, shaping the direction and vision of our project.
 
 #### Community of Researchers and Educators
 
