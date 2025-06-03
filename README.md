@@ -5,33 +5,35 @@
 [![Unity Version](https://img.shields.io/badge/Unity-2023.3.0f1-blue.svg)](https://unity3d.com/get-unity/download)
 [![Node.js Version](https://img.shields.io/badge/Node.js-20.10.0-green.svg)](https://nodejs.org/)
 
-> Revolutionizing collaborative thinking and problem-solving through intelligent ranking systems and gamified AI research contribution.
+> Learn to spot AI-generated content through engaging gameplay and contribute to vital research in AI literacy.
 
-ThinkRank represents a paradigm shift in how we approach artificial intelligence research and education. By seamlessly blending engaging game mechanics with cutting-edge generative AI education, our platform transforms every interaction into a meaningful contribution to the global AI research community. Players embark on intellectually stimulating journeys through bias detection challenges while simultaneously advancing real-world AI research through innovative crowdsourced problem-solving methodologies.
+ThinkRank is a pioneering platform at the intersection of gamified learning, citizen science, and AI literacy education. It addresses the critical challenge of identifying AI-generated content by empowering users to develop their detection skills in an interactive environment. Our core mission is to help bridge the gap in AI content detection – a field that is not yet an exact science – through engaging, game-like experiences, inspired by the success of citizen science projects like McGill's Phylo game.
 
 ## 🌟 Vision & Mission
 
-**Our Vision**: To democratize AI research participation and create a global community where curiosity, critical thinking, and collaborative problem-solving drive the future of artificial intelligence.
+**Our Vision**: To be the leading platform for advancing AI literacy globally, fostering a community where users learn to critically evaluate AI-generated content and contribute to cutting-edge research.
 
-**Our Mission**: ThinkRank bridges the gap between academic research and public engagement by transforming complex AI concepts into accessible, engaging experiences that empower individuals to contribute meaningfully to the advancement of artificial intelligence while developing essential 21st-century thinking skills.
+**Our Mission**: ThinkRank's core mission is to create a "gamified" platform that helps users learn to spot AI-generated language and images. We aim to make AI literacy accessible and engaging, transforming complex detection challenges into interactive experiences. By participating, users not only enhance their own skills but also contribute valuable data to the ongoing research in AI content identification, helping to address the nuances of an evolving digital landscape.
 
 **Potential Roadmap & Development Ideas**: https://www.perplexity.ai/search/persona-you-are-an-advanced-ai-7fIpbB0PT6a775_pBgRr8g
 
 ## 🎯 Project Overview
 
-ThinkRank is more than a game—it's an ecosystem for cultivating intellectual curiosity and advancing AI research through collective intelligence. Our platform leverages the power of gamification to make AI research accessible, engaging, and impactful for a global audience.
+ThinkRank is a "gamified" platform designed to enhance AI literacy by teaching users to identify AI-generated language and images. It's an ecosystem where users engage in game-like challenges, improve their detection skills, and contribute to valuable research in AI content identification. Our platform aims to make learning about AI engaging, accessible, and impactful, drawing inspiration from successful citizen science projects.
 
 ### Core Philosophy
-- **Human-AI Collaboration**: Fostering symbiotic relationships between human insight and artificial intelligence
-- **Inclusive Research**: Making AI research participation accessible regardless of technical background
-- **Ethical AI Development**: Promoting responsible AI practices through bias detection and critical evaluation
-- **Community-Driven Innovation**: Harnessing collective intelligence to solve complex research challenges
+- **Gamified AI Literacy**: Making learning to spot AI-generated content engaging and fun.
+- **Citizen Science**: Empowering users to contribute to real AI detection research.
+- **Bridging the Gap**: Addressing the current limitations in AI content detection through education and crowdsourced data.
+- **Ethical AI Awareness**: Promoting critical thinking about AI-generated content and its implications.
+- **Community-Driven Learning**: Fostering a collaborative environment for skill development and knowledge sharing.
 
 ### Technical Excellence
-- **Platform**: Cross-platform mobile (iOS/Android) with cloud-native architecture
-- **Technology Stack**: Unity 2023.3 LTS, Node.js/TypeScript, Supabase, AWS
-- **Architecture**: Microservices backend with enterprise-grade scalability
-- **Performance Targets**: 60fps gameplay, <200ms API responses, 99.9% uptime
+- **Core Focus**: Developing robust AI detection algorithms for text and images, integrated into an engaging gamified experience.
+- **Platform**: Cross-platform accessibility (initially web-focused prototype, with mobile considerations for future scaling) leveraging modern web technologies.
+- **Technology Stack**: Emphasis on Python for AI/ML, React/TypeScript for frontend, and Node.js/Express or FastAPI for backend services, with Supabase for real-time features and data management.
+- **Data & Research**: Systems for content management, user progression tracking, and data aggregation to support citizen science research contributions.
+- **User Experience**: Intuitive UI/UX designed for learning, engagement, and clear feedback, incorporating accessibility (WCAG) principles.
 
 ## 🏗️ Architecture
 
