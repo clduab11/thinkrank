@@ -15,6 +15,8 @@ ThinkRank represents a paradigm shift in how we approach artificial intelligence
 
 **Our Mission**: ThinkRank bridges the gap between academic research and public engagement by transforming complex AI concepts into accessible, engaging experiences that empower individuals to contribute meaningfully to the advancement of artificial intelligence while developing essential 21st-century thinking skills.
 
+**Potential Roadmap & Development Ideas**: https://www.perplexity.ai/search/persona-you-are-an-advanced-ai-7fIpbB0PT6a775_pBgRr8g
+
 ## 🎯 Project Overview
 
 ThinkRank is more than a game—it's an ecosystem for cultivating intellectual curiosity and advancing AI research through collective intelligence. Our platform leverages the power of gamification to make AI research accessible, engaging, and impactful for a global audience.
