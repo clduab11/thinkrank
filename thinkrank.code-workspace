@@ -53,7 +53,7 @@
     "typescript.preferences.importModuleSpecifier": "relative",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-      "source.fixAll.eslint": true
+      "source.fixAll.eslint": "explicit"
     },
     "supabase.showInlineErrors": true,
     "unity.editorPath": "/Applications/Unity/Hub/Editor/2023.3.0f1/Unity.app"
