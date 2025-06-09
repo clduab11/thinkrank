@@ -420,12 +420,13 @@ export class AlertingService {
         channels: ['console'] // For now just log
       });
 
-      // Console notification for development
-      console.log(`🚨 ALERT [${alert.severity.toUpperCase()}]: ${alert.title}`);
-      console.log(`   ${alert.message}`);
-      if (alert.threshold && alert.currentValue) {
-        console.log(`   Current: ${alert.currentValue}, Threshold: ${alert.threshold}`);
-      }
+      // Console notification for development - use proper logging
+      logger.warn(`🚨 ALERT [${alert.severity.toUpperCase()}]: ${alert.title}`, {
+        message: alert.message,
+        currentValue: alert.currentValue,
+        threshold: alert.threshold,
+        severity: alert.severity
+      });
     } catch (error) {
       logger.error('Failed to send alert notifications', { error });
     }

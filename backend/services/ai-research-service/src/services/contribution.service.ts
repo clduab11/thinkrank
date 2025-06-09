@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { logger } from './logger.service';
 import {
   ContributionSolution,
   PeerReview,
@@ -311,10 +312,16 @@ export class ContributionService {
       // For peer review or expert review, mark as pending and queue for review
       else {
         // Could implement queuing system here
-        console.log(`Contribution ${contribution.contributionId} queued for ${criteria.validationMethod}`);
+        logger.info('Contribution queued for validation', {
+          contributionId: contribution.contributionId,
+          validationMethod: criteria.validationMethod
+        });
       }
     } catch (error) {
-      console.error('Error initiating validation:', error);
+      logger.error('Error initiating validation', {
+        contributionId: contribution.contributionId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }, error as Error);
     }
   }
 
