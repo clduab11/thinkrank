@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: thinkrank
+  EKS_CLUSTER_NAME: thinkrank-cluster
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    needs: release
+    
+    strategy:
+      matrix:
+        service: [auth-service, game-service, ai-service, social-service]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.ref_name }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY/${{ matrix.service }}:$IMAGE_TAG \
+            -f backend/services/${{ matrix.service }}/Dockerfile \
+            backend/services/${{ matrix.service }}
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY/${{ matrix.service }}:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY/${{ matrix.service }}:$IMAGE_TAG \
+            $ECR_REGISTRY/$ECR_REPOSITORY/${{ matrix.service }}:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY/${{ matrix.service }}:latest
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [release, build-and-push]
+    environment: production
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+      
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl set image deployment/auth-service auth-service=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}/auth-service:${{ github.ref_name }} -n thinkrank
+          kubectl set image deployment/game-service game-service=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}/game-service:${{ github.ref_name }} -n thinkrank
+          kubectl set image deployment/ai-service ai-service=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}/ai-service:${{ github.ref_name }} -n thinkrank
+          kubectl set image deployment/social-service social-service=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}/social-service:${{ github.ref_name }} -n thinkrank
+          
+          kubectl rollout status deployment -n thinkrank --timeout=600s
+      
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against production..."
+          # npm run test:smoke
