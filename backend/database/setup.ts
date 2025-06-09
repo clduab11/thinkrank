@@ -229,64 +229,90 @@ class DatabaseSetup {
   }
 }
 
-// CLI interface
-async function main() {
-  const args = process.argv.slice(2);
-  const command = args[0];
+class DatabaseCLI {
+  private dbSetup = new DatabaseSetup();
 
-  const dbSetup = new DatabaseSetup();
+  private async executeMigrateCommand(): Promise<void> {
+    await this.dbSetup.runMigrations();
+  }
 
-  try {
-    switch (command) {
-      case 'migrate':
-        await dbSetup.runMigrations();
-        break;
+  private async executeSeedCommand(): Promise<void> {
+    await this.dbSetup.loadSeedData();
+  }
 
-      case 'seed':
-        await dbSetup.loadSeedData();
-        break;
+  private async executeSetupCommand(): Promise<void> {
+    await this.dbSetup.runMigrations();
+    await this.dbSetup.loadSeedData();
+  }
 
-      case 'setup':
-        await dbSetup.runMigrations();
-        await dbSetup.loadSeedData();
-        break;
-
-      case 'reset':
-        if (process.env.NODE_ENV !== 'production') {
-          await dbSetup.resetDatabase();
-          await dbSetup.runMigrations();
-          await dbSetup.loadSeedData();
-        } else {
-          logger.error('Reset command not allowed in production');
-          process.exit(1);
-        }
-        break;
-
-      case 'check':
-        const isConnected = await dbSetup.checkConnection();
-        if (isConnected) {
-          logger.info('Database connection successful');
-          process.exit(0);
-        } else {
-          logger.error('Database connection failed');
-          process.exit(1);
-        }
-        break;
-
-      default:
-        console.log('Usage: npm run db <command>');
-        console.log('Commands:');
-        console.log('  migrate  - Run pending migrations');
-        console.log('  seed     - Load seed data');
-        console.log('  setup    - Run migrations and load seed data');
-        console.log('  reset    - Reset database and reload (dev only)');
-        console.log('  check    - Check database connection');
-        process.exit(1);
+  private async executeResetCommand(): Promise<void> {
+    if (process.env.NODE_ENV !== 'production') {
+      await this.dbSetup.resetDatabase();
+      await this.dbSetup.runMigrations();
+      await this.dbSetup.loadSeedData();
+    } else {
+      logger.error('Reset command not allowed in production');
+      process.exit(1);
     }
-  } catch (error) {
-    logger.error('Database setup failed', {}, error as Error);
+  }
+
+  private async executeCheckCommand(): Promise<void> {
+    const isConnected = await this.dbSetup.checkConnection();
+    if (isConnected) {
+      logger.info('Database connection successful');
+      process.exit(0);
+    } else {
+      logger.error('Database connection failed');
+      process.exit(1);
+    }
+  }
+
+  private showUsage(): void {
+    logger.info('Usage: npm run db <command>');
+    logger.info('Commands:');
+    logger.info('  migrate  - Run pending migrations');
+    logger.info('  seed     - Load seed data');
+    logger.info('  setup    - Run migrations and load seed data');
+    logger.info('  reset    - Reset database and reload (dev only)');
+    logger.info('  check    - Check database connection');
     process.exit(1);
   }
+
+  public async run(args: string[]): Promise<void> {
+    const command = args[0];
+
+    try {
+      switch (command) {
+        case 'migrate':
+          await this.executeMigrateCommand();
+          break;
+        case 'seed':
+          await this.executeSeedCommand();
+          break;
+        case 'setup':
+          await this.executeSetupCommand();
+          break;
+        case 'reset':
+          await this.executeResetCommand();
+          break;
+        case 'check':
+          await this.executeCheckCommand();
+          break;
+        default:
+          this.showUsage();
+      }
+    } catch (error) {
+      logger.error('Database setup failed', {}, error as Error);
+      process.exit(1);
+    }
+  }
+}
+
+// CLI interface
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const cli = new DatabaseCLI();
+  await cli.run(args);
 }
 
 // Run if called directly
