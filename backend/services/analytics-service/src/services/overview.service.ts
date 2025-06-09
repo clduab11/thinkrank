@@ -70,11 +70,11 @@ export class OverviewService {
       }
 
       return {
-        totalUsers: totalUsers?.length || 0,
-        totalGames: totalGames?.length || 0,
+        totalUsers: totalUsers?.count || 0,
+        totalGames: totalGames?.count || 0,
         totalRevenue,
-        activeUsers: activeUsers?.length || 0,
-        conversionRate: totalUsers?.length ? (revenueData?.length || 0) / totalUsers.length : 0
+        activeUsers: activeUsers?.count || 0,
+        conversionRate: totalUsers?.count ? (revenueData?.length || 0) / totalUsers.count : 0
       };
     } catch (error) {
       logger.error('Error in getOverview', {}, error as Error);
