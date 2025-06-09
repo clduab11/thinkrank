@@ -268,13 +268,13 @@ class DatabaseCLI {
   }
 
   private showUsage(): void {
-    logger.info('Usage: npm run db <command>');
-    logger.info('Commands:');
-    logger.info('  migrate  - Run pending migrations');
-    logger.info('  seed     - Load seed data');
-    logger.info('  setup    - Run migrations and load seed data');
-    logger.info('  reset    - Reset database and reload (dev only)');
-    logger.info('  check    - Check database connection');
+    console.log('Usage: npm run db <command>');
+    console.log('Commands:');
+    console.log('  migrate  - Run pending migrations');
+    console.log('  seed     - Load seed data');
+    console.log('  setup    - Run migrations and load seed data');
+    console.log('  reset    - Reset database and reload (dev only)');
+    console.log('  check    - Check database connection');
     process.exit(1);
   }
 
