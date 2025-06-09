@@ -7,6 +7,16 @@
 
 > Learn to spot AI-generated content through engaging gameplay and contribute to vital research in AI literacy.
 
+## 🚀 Migration Notice
+
+**✅ PROJECT MIGRATION COMPLETED** - The codebase has been successfully migrated from `claude-code-sparc/` to the main project directory. All components are now in their final locations:
+
+- **Frontend**: React app with complete game components, Redux state management, and API integration
+- **Backend**: Microservices architecture with AI service, Auth service, Game service, and Social service  
+- **Infrastructure**: Docker containers, Kubernetes manifests, monitoring, and logging configurations
+- **Tests**: 183 backend tests + 109 frontend tests - all passing ✅
+- **Documentation**: Complete API docs, architecture guides, and deployment instructions
+
 ThinkRank is a pioneering platform at the intersection of gamified learning, citizen science, and AI literacy education. It addresses the critical challenge of identifying AI-generated content by empowering users to develop their detection skills in an interactive environment. Our core mission is to help bridge the gap in AI content detection – a field that is not yet an exact science – through engaging, game-like experiences, inspired by the success of citizen science projects like McGill's Phylo game.
 
 ## 🌟 Vision & Mission

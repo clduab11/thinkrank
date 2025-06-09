@@ -2,45 +2,9 @@
   "semi": true,
   "trailingComma": "es5",
   "singleQuote": true,
-  "printWidth": 80,
+  "printWidth": 100,
   "tabWidth": 2,
   "useTabs": false,
-  "bracketSpacing": true,
-  "bracketSameLine": false,
-  "arrowParens": "avoid",
-  "endOfLine": "lf",
-  "quoteProps": "as-needed",
-  "jsxSingleQuote": true,
-  "proseWrap": "preserve",
-  "htmlWhitespaceSensitivity": "css",
-  "embeddedLanguageFormatting": "auto",
-  "overrides": [
-    {
-      "files": "*.json",
-      "options": {
-        "printWidth": 120
-      }
-    },
-    {
-      "files": "*.md",
-      "options": {
-        "proseWrap": "always",
-        "printWidth": 80
-      }
-    },
-    {
-      "files": "*.yml",
-      "options": {
-        "tabWidth": 2,
-        "singleQuote": false
-      }
-    },
-    {
-      "files": "*.yaml",
-      "options": {
-        "tabWidth": 2,
-        "singleQuote": false
-      }
-    }
-  ]
+  "arrowParens": "always",
+  "endOfLine": "lf"
 }

@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+  namespace: thinkrank
+data:
+  fluent.conf: |
+    <source>
+      @type tail
+      path /var/log/containers/*.log
+      pos_file /var/log/fluentd-containers.log.pos
+      tag kubernetes.*
+      read_from_head true
+      <parse>
+        @type json
+        time_format %Y-%m-%dT%H:%M:%S.%NZ
+      </parse>
+    </source>
+
+    <filter kubernetes.**>
+      @type kubernetes_metadata
+      @id filter_kube_metadata
+      kubernetes_url "#{ENV['FLUENT_FILTER_KUBERNETES_URL'] || 'https://' + ENV.fetch('KUBERNETES_SERVICE_HOST') + ':' + ENV.fetch('KUBERNETES_SERVICE_PORT') + '/api'}"
+      verify_ssl "#{ENV['KUBERNETES_VERIFY_SSL'] || true}"
+      ca_file "#{ENV['KUBERNETES_CA_FILE']}"
+      skip_labels "#{ENV['FLUENT_KUBERNETES_METADATA_SKIP_LABELS'] || 'false'}"
+      skip_container_metadata "#{ENV['FLUENT_KUBERNETES_METADATA_SKIP_CONTAINER_METADATA'] || 'false'}"
+      skip_master_url "#{ENV['FLUENT_KUBERNETES_METADATA_SKIP_MASTER_URL'] || 'false'}"
+      skip_namespace_metadata "#{ENV['FLUENT_KUBERNETES_METADATA_SKIP_NAMESPACE_METADATA'] || 'false'}"
+    </filter>
+
+    <filter kubernetes.**>
+      @type record_transformer
+      enable_ruby
+      <record>
+        hostname ${hostname}
+        environment "#{ENV['NODE_ENV'] || 'production'}"
+        service ${record.dig("kubernetes", "labels", "app") || "unknown"}
+        namespace ${record.dig("kubernetes", "namespace_name") || "unknown"}
+        pod_name ${record.dig("kubernetes", "pod_name") || "unknown"}
+        container_name ${record.dig("kubernetes", "container_name") || "unknown"}
+      </record>
+    </filter>
+
+    <filter kubernetes.**>
+      @type grep
+      <regexp>
+        key $.kubernetes.namespace_name
+        pattern ^thinkrank$
+      </regexp>
+    </filter>
+
+    <match kubernetes.**>
+      @type elasticsearch
+      host "#{ENV['ELASTICSEARCH_HOST'] || 'elasticsearch'}"
+      port "#{ENV['ELASTICSEARCH_PORT'] || '9200'}"
+      scheme "#{ENV['ELASTICSEARCH_SCHEME'] || 'http'}"
+      ssl_verify "#{ENV['ELASTICSEARCH_SSL_VERIFY'] || 'false'}"
+      ssl_version "#{ENV['ELASTICSEARCH_SSL_VERSION'] || 'TLSv1_2'}"
+      user "#{ENV['ELASTICSEARCH_USER']}"
+      password "#{ENV['ELASTICSEARCH_PASSWORD']}"
+      logstash_format true
+      logstash_prefix thinkrank
+      logstash_dateformat %Y.%m.%d
+      include_tag_key true
+      type_name _doc
+      tag_key @log_name
+      flush_interval 1s
+      <buffer>
+        flush_thread_count 2
+        flush_interval 5s
+        chunk_limit_size 2M
+        queue_limit_length 32
+        retry_max_interval 30
+        retry_forever false
+      </buffer>
+    </match>

@@ -1,0 +1,176 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15.5-alpine
+    container_name: thinkrank-postgres
+    environment:
+      POSTGRES_DB: thinkrank_dev
+      POSTGRES_USER: thinkrank
+      POSTGRES_PASSWORD: thinkrank_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - thinkrank-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thinkrank -d thinkrank_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7.2.3-alpine
+    container_name: thinkrank-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - thinkrank-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ../../backend/services/api-gateway
+      dockerfile: Dockerfile
+    container_name: thinkrank-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - GAME_SERVICE_URL=http://game-service:3002
+      - AI_RESEARCH_SERVICE_URL=http://ai-research-service:3003
+      - SOCIAL_SERVICE_URL=http://social-service:3004
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3005
+    depends_on:
+      - auth-service
+      - game-service
+      - ai-research-service
+      - social-service
+      - analytics-service
+    networks:
+      - thinkrank-network
+    restart: unless-stopped
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ../../backend/services/auth-service
+      dockerfile: Dockerfile
+    container_name: thinkrank-auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=postgresql://thinkrank:thinkrank_password@postgres:5432/thinkrank_dev
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - thinkrank-network
+    restart: unless-stopped
+
+  # Game Service
+  game-service:
+    build:
+      context: ../../backend/services/game-service
+      dockerfile: Dockerfile
+    container_name: thinkrank-game-service
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - DATABASE_URL=postgresql://thinkrank:thinkrank_password@postgres:5432/thinkrank_dev
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - thinkrank-network
+    restart: unless-stopped
+
+  # AI Research Service
+  ai-research-service:
+    build:
+      context: ../../backend/services/ai-research-service
+      dockerfile: Dockerfile
+    container_name: thinkrank-ai-research-service
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - DATABASE_URL=postgresql://thinkrank:thinkrank_password@postgres:5432/thinkrank_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - thinkrank-network
+    restart: unless-stopped
+
+  # Social Service
+  social-service:
+    build:
+      context: ../../backend/services/social-service
+      dockerfile: Dockerfile
+    container_name: thinkrank-social-service
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=development
+      - PORT=3004
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - thinkrank-network
+    restart: unless-stopped
+
+  # Analytics Service
+  analytics-service:
+    build:
+      context: ../../backend/services/analytics-service
+      dockerfile: Dockerfile
+    container_name: thinkrank-analytics-service
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=development
+      - PORT=3005
+      - DATABASE_URL=postgresql://thinkrank:thinkrank_password@postgres:5432/thinkrank_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - thinkrank-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  thinkrank-network:
+    driver: bridge
