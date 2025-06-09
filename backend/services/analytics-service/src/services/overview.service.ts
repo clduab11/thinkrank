@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import moment from 'moment';
 import { logger } from '../logger.service';
 
 const supabaseUrl = process.env['SUPABASE_URL']!;
