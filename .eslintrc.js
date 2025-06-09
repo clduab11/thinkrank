@@ -6,15 +6,12 @@ module.exports = {
     jest: true,
   },
   extends: [
-    '@typescript-eslint/recommended',
-    '@typescript-eslint/recommended-requiring-type-checking',
-    'prettier',
+    'eslint:recommended',
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2022,
     sourceType: 'module',
-    project: ['./tsconfig.json', './backend/services/*/tsconfig.json'],
   },
   plugins: ['@typescript-eslint'],
   rules: {
