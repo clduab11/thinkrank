@@ -1,16 +1,21 @@
 // Error handling utilities and custom error classes
+
+interface ErrorDetails {
+  [key: string]: unknown;
+}
+
 export class AppError extends Error {
   public readonly statusCode: number;
   public readonly isOperational: boolean;
   public readonly code: string;
-  public readonly details?: any;
+  public readonly details?: ErrorDetails;
 
   constructor(
     message: string,
     statusCode: number = 500,
     code: string = 'INTERNAL_ERROR',
     isOperational: boolean = true,
-    details?: any
+    details?: ErrorDetails
   ) {
     super(message);
     this.statusCode = statusCode;
@@ -24,26 +29,26 @@ export class AppError extends Error {
 
 // Authentication errors
 export class AuthenticationError extends AppError {
-  constructor(message: string = 'Authentication failed', details?: any) {
+  constructor(message: string = 'Authentication failed', details?: ErrorDetails) {
     super(message, 401, 'AUTHENTICATION_ERROR', true, details);
   }
 }
 
 export class AuthorizationError extends AppError {
-  constructor(message: string = 'Access denied', details?: any) {
+  constructor(message: string = 'Access denied', details?: ErrorDetails) {
     super(message, 403, 'AUTHORIZATION_ERROR', true, details);
   }
 }
 
 export class TokenExpiredError extends AppError {
-  constructor(message: string = 'Token has expired', details?: any) {
+  constructor(message: string = 'Token has expired', details?: ErrorDetails) {
     super(message, 401, 'TOKEN_EXPIRED', true, details);
   }
 }
 
 // Validation errors
 export class ValidationError extends AppError {
-  constructor(message: string = 'Validation failed', details?: any) {
+  constructor(message: string = 'Validation failed', details?: ErrorDetails) {
     super(message, 400, 'VALIDATION_ERROR', true, details);
   }
 }
@@ -71,14 +76,14 @@ export class NotFoundError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string = 'Resource conflict', details?: any) {
+  constructor(message: string = 'Resource conflict', details?: ErrorDetails) {
     super(message, 409, 'CONFLICT', true, details);
   }
 }
 
 // Business logic errors
 export class BusinessLogicError extends AppError {
-  constructor(message: string, details?: any) {
+  constructor(message: string, details?: ErrorDetails) {
     super(message, 422, 'BUSINESS_LOGIC_ERROR', true, details);
   }
 }
@@ -109,39 +114,39 @@ export class RateLimitError extends AppError {
 
 // External service errors
 export class ExternalServiceError extends AppError {
-  constructor(service: string, message: string = 'External service error', details?: any) {
+  constructor(service: string, message: string = 'External service error', details?: ErrorDetails) {
     super(`${service}: ${message}`, 502, 'EXTERNAL_SERVICE_ERROR', true, { service, ...details });
   }
 }
 
 export class DatabaseError extends AppError {
-  constructor(message: string = 'Database operation failed', details?: any) {
+  constructor(message: string = 'Database operation failed', details?: ErrorDetails) {
     super(message, 500, 'DATABASE_ERROR', false, details);
   }
 }
 
 // Payment errors
 export class PaymentError extends AppError {
-  constructor(message: string = 'Payment processing failed', details?: any) {
+  constructor(message: string = 'Payment processing failed', details?: ErrorDetails) {
     super(message, 402, 'PAYMENT_ERROR', true, details);
   }
 }
 
 export class SubscriptionError extends AppError {
-  constructor(message: string = 'Subscription error', details?: any) {
+  constructor(message: string = 'Subscription error', details?: ErrorDetails) {
     super(message, 400, 'SUBSCRIPTION_ERROR', true, details);
   }
 }
 
 // Research-specific errors
 export class ResearchValidationError extends AppError {
-  constructor(message: string = 'Research validation failed', details?: any) {
+  constructor(message: string = 'Research validation failed', details?: ErrorDetails) {
     super(message, 422, 'RESEARCH_VALIDATION_ERROR', true, details);
   }
 }
 
 export class ContributionError extends AppError {
-  constructor(message: string = 'Contribution processing failed', details?: any) {
+  constructor(message: string = 'Contribution processing failed', details?: ErrorDetails) {
     super(message, 422, 'CONTRIBUTION_ERROR', true, details);
   }
 }
@@ -152,7 +157,7 @@ export interface ErrorResponse {
   error: {
     code: string;
     message: string;
-    details?: any;
+    details?: ErrorDetails;
   };
   meta: {
     timestamp: string;
@@ -217,6 +222,19 @@ export class ErrorFormatter {
   }
 }
 
+import { Request, Response, NextFunction } from 'express';
+
+interface Logger {
+  warn: (message: string, data?: ErrorDetails) => void;
+  error: (message: string, data?: ErrorDetails) => void;
+}
+
+interface SupabaseError {
+  code?: string;
+  message?: string;
+  details?: ErrorDetails;
+}
+
 // Error handler utility
 export class ErrorHandler {
   // Check if error is operational (expected) or programming error
@@ -245,7 +263,7 @@ export class ErrorHandler {
 
   // Sanitize error for client response (remove sensitive information)
   static sanitizeError(error: AppError, includeStack: boolean = false): Partial<AppError> {
-    const sanitized: any = {
+    const sanitized: Partial<AppError> = {
       message: error.message,
       statusCode: error.statusCode,
       code: error.code,
@@ -260,14 +278,14 @@ export class ErrorHandler {
   }
 
   // Handle async errors in Express middleware
-  static asyncHandler(fn: Function) {
-    return (req: any, res: any, next: any) => {
+  static asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
+    return (req: Request, res: Response, next: NextFunction) => {
       Promise.resolve(fn(req, res, next)).catch(next);
     };
   }
 
   // Create error from Supabase error
-  static fromSupabaseError(supabaseError: any): AppError {
+  static fromSupabaseError(supabaseError: SupabaseError): AppError {
     const { code, message, details } = supabaseError;
 
     switch (code) {
@@ -285,7 +303,7 @@ export class ErrorHandler {
   }
 
   // Log error with appropriate level
-  static logError(error: Error, logger: any, context?: any): void {
+  static logError(error: Error, logger: Logger, context?: ErrorDetails): void {
     const errorCode = this.getErrorCode(error);
     const isOperational = this.isOperationalError(error);
 
@@ -306,18 +324,18 @@ export class ErrorHandler {
 }
 
 // Type guards for error checking
-export const isAppError = (error: any): error is AppError => {
+export const isAppError = (error: unknown): error is AppError => {
   return error instanceof AppError;
 };
 
-export const isValidationError = (error: any): error is ValidationError => {
+export const isValidationError = (error: unknown): error is ValidationError => {
   return error instanceof ValidationError;
 };
 
-export const isAuthenticationError = (error: any): error is AuthenticationError => {
+export const isAuthenticationError = (error: unknown): error is AuthenticationError => {
   return error instanceof AuthenticationError;
 };
 
-export const isNotFoundError = (error: any): error is NotFoundError => {
+export const isNotFoundError = (error: unknown): error is NotFoundError => {
   return error instanceof NotFoundError;
 };

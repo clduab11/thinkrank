@@ -82,7 +82,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             <div className="text-right">
               <p className="text-sm text-gray-600">Score</p>
               <p className="text-2xl font-bold text-primary-600">
-                Score: {game.score}
+                {game.score}
               </p>
               {showBonus && (
                 <p className="text-lg font-bold text-success animate-bounce">
@@ -107,7 +107,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 <p className="text-sm text-gray-600">Streak</p>
                 <p className="text-2xl font-bold text-warning flex items-center gap-1">
                   <span data-testid="streak-fire">🔥</span>
-                  Streak: {streak}
+                  {streak}
                 </p>
               </div>
             )}

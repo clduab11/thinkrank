@@ -10,16 +10,16 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "build:backend": "npm run build --workspaces --if-present",
     "dev": "concurrently \"npm run dev:auth\" \"npm run dev:game\" \"npm run dev:social\"",
     "dev:backend": "concurrently \"npm run dev --workspace=backend/services/auth-service\" \"npm run dev --workspace=backend/services/game-service\" \"npm run dev --workspace=backend/services/ai-research-service\" \"npm run dev --workspace=backend/services/social-service\" \"npm run dev --workspace=backend/services/analytics-service\" \"npm run dev --workspace=backend/services/api-gateway\"",
     "test": "npm run test --workspaces --if-present",
     "test:integration": "jest --config=backend/tests/jest.integration.config.js",
     "test:performance": "npm run test:performance --workspaces --if-present",
+    "test:e2e": "jest --config=backend/tests/jest.e2e.config.js",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "npm run lint:fix --workspaces --if-present",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "format:check": "prettier --check \"**/*.{js,ts,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
     "docker:build": "docker-compose -f infrastructure/docker/docker-compose.yml build",
     "docker:up": "docker-compose -f infrastructure/docker/docker-compose.yml up -d",
     "docker:down": "docker-compose -f infrastructure/docker/docker-compose.yml down",
@@ -38,7 +38,6 @@
     "dev:social": "npm run dev --workspace=backend/services/social-service",
     "test:auth": "npm test --workspace=backend/services/auth-service",
     "test:game": "npm test --workspace=backend/services/game-service",
-    "test:e2e": "jest --config=backend/tests/jest.e2e.config.js",
     "build:production": "NODE_ENV=production npm run build",
     "docker:build:all": "docker-compose -f docker-compose.yml build",
     "health-check": "node scripts/health-check.js",
@@ -50,20 +49,20 @@
     "dev:ai": "npm run dev --workspace=backend/services/ai-service"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^6.13.2",
-    "@typescript-eslint/parser": "^6.13.2",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "concurrently": "^8.2.2",
-    "eslint": "^8.55.0",
+    "eslint": "^9.9.1",
     "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-prettier": "^5.0.1",
-    "husky": "^8.0.3",
-    "lint-staged": "^15.1.0",
-    "prettier": "^3.1.0",
-    "typescript": "^5.3.3",
-    "@types/jest": "^29.5.11",
-    "@types/node": "^20.10.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "husky": "^9.1.5",
+    "lint-staged": "^15.2.9",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22.5.4",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.1",
+    "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2"
   },
   "lint-staged": {
@@ -82,8 +81,8 @@
     }
   },
   "engines": {
-    "node": ">=20.10.0",
-    "npm": ">=10.2.0"
+    "node": ">=20.17.0",
+    "npm": ">=10.8.0"
   },
   "keywords": [
     "ai",
