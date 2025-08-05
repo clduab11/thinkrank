@@ -1,0 +1,583 @@
+# SLI/SLO Monitoring Configuration for ThinkRank Services
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slo-definitions
+  namespace: thinkrank
+data:
+  slos.yaml: |
+    # ThinkRank Service Level Objectives
+    services:
+      auth-service:
+        availability_slo: 99.9  # 99.9% uptime
+        latency_slo:
+          p95: 200ms           # 95th percentile under 200ms
+          p99: 500ms           # 99th percentile under 500ms
+        error_rate_slo: 0.1    # Less than 0.1% error rate
+        throughput_sli: "requests per second"
+        
+      game-service:
+        availability_slo: 99.5  # 99.5% uptime (acceptable for gaming)
+        latency_slo:
+          p95: 500ms           # 95th percentile under 500ms
+          p99: 1000ms          # 99th percentile under 1s
+        error_rate_slo: 0.5    # Less than 0.5% error rate
+        throughput_sli: "game sessions per minute"
+        
+      ai-service:
+        availability_slo: 99.0  # 99% uptime (AI can be temporarily unavailable)
+        latency_slo:
+          p95: 2000ms          # 95th percentile under 2s
+          p99: 5000ms          # 99th percentile under 5s
+        error_rate_slo: 1.0    # Less than 1% error rate
+        throughput_sli: "ai requests per minute"
+        cost_sli: "cost per 1000 requests"
+        
+      social-service:
+        availability_slo: 99.5  # 99.5% uptime
+        latency_slo:
+          p95: 300ms           # 95th percentile under 300ms
+          p99: 800ms           # 99th percentile under 800ms
+        error_rate_slo: 0.2    # Less than 0.2% error rate
+        
+      analytics-service:
+        availability_slo: 99.0  # 99% uptime (not user-facing)
+        latency_slo:
+          p95: 1000ms          # 95th percentile under 1s
+          p99: 3000ms          # 99th percentile under 3s
+        error_rate_slo: 1.0    # Less than 1% error rate
+        
+    # Global SLOs for infrastructure
+    infrastructure:
+      kubernetes_cluster:
+        availability_slo: 99.95 # 99.95% cluster uptime
+        node_availability_slo: 99.9 # 99.9% node uptime
+        
+      database:
+        availability_slo: 99.9  # 99.9% database uptime
+        latency_slo:
+          p95: 10ms            # 95th percentile under 10ms
+          p99: 50ms            # 99th percentile under 50ms
+        connection_pool_slo: 80 # Max 80% connection pool usage
+        
+      redis:
+        availability_slo: 99.5  # 99.5% Redis uptime
+        latency_slo:
+          p95: 5ms             # 95th percentile under 5ms
+          p99: 20ms            # 99th percentile under 20ms
+
+---
+# Prometheus Recording Rules for SLI Calculations
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sli-recording-rules
+  namespace: thinkrank
+  labels:
+    app: prometheus
+    role: sli-rules
+spec:
+  groups:
+  - name: sli.availability.rules
+    interval: 30s
+    rules:
+    # Availability SLI - Success rate over time windows
+    - record: sli:availability:rate1m
+      expr: |
+        (
+          sum(rate(http_requests_total{code!~"5.."}[1m])) by (service)
+          /
+          sum(rate(http_requests_total[1m])) by (service)
+        ) * 100
+        
+    - record: sli:availability:rate5m
+      expr: |
+        (
+          sum(rate(http_requests_total{code!~"5.."}[5m])) by (service)
+          /
+          sum(rate(http_requests_total[5m])) by (service)
+        ) * 100
+        
+    - record: sli:availability:rate30m
+      expr: |
+        (
+          sum(rate(http_requests_total{code!~"5.."}[30m])) by (service)
+          /
+          sum(rate(http_requests_total[30m])) by (service)
+        ) * 100
+        
+    - record: sli:availability:rate24h
+      expr: |
+        (
+          sum(rate(http_requests_total{code!~"5.."}[24h])) by (service)
+          /
+          sum(rate(http_requests_total[24h])) by (service)
+        ) * 100
+
+  - name: sli.latency.rules
+    interval: 30s
+    rules:
+    # Latency SLI - Response time percentiles
+    - record: sli:latency:p95:1m
+      expr: |
+        histogram_quantile(0.95,
+          sum(rate(http_request_duration_seconds_bucket[1m])) by (service, le)
+        ) * 1000
+        
+    - record: sli:latency:p99:1m
+      expr: |
+        histogram_quantile(0.99,
+          sum(rate(http_request_duration_seconds_bucket[1m])) by (service, le)
+        ) * 1000
+        
+    - record: sli:latency:p95:5m
+      expr: |
+        histogram_quantile(0.95,
+          sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+        ) * 1000
+        
+    - record: sli:latency:p99:5m
+      expr: |
+        histogram_quantile(0.99,
+          sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+        ) * 1000
+
+  - name: sli.error_rate.rules
+    interval: 30s
+    rules:
+    # Error Rate SLI
+    - record: sli:error_rate:1m
+      expr: |
+        (
+          sum(rate(http_requests_total{code=~"5.."}[1m])) by (service)
+          /
+          sum(rate(http_requests_total[1m])) by (service)
+        ) * 100
+        
+    - record: sli:error_rate:5m
+      expr: |
+        (
+          sum(rate(http_requests_total{code=~"5.."}[5m])) by (service)
+          /
+          sum(rate(http_requests_total[5m])) by (service)
+        ) * 100
+
+  - name: sli.throughput.rules
+    interval: 30s
+    rules:
+    # Throughput SLI
+    - record: sli:throughput:requests_per_second
+      expr: |
+        sum(rate(http_requests_total[1m])) by (service)
+        
+    - record: sli:throughput:game_sessions_per_minute
+      expr: |
+        sum(rate(thinkrank_game_sessions_started_total[1m])) by (service) * 60
+        
+    - record: sli:throughput:ai_requests_per_minute
+      expr: |
+        sum(rate(thinkrank_ai_requests_total[1m])) by (service) * 60
+
+  - name: sli.infrastructure.rules
+    interval: 30s
+    rules:
+    # Infrastructure SLIs
+    - record: sli:database:availability
+      expr: |
+        avg(up{job="postgres"}) * 100
+        
+    - record: sli:database:latency:p95
+      expr: |
+        histogram_quantile(0.95,
+          sum(rate(pg_stat_statements_total_time_bucket[5m])) by (le)
+        )
+        
+    - record: sli:database:connection_pool_usage
+      expr: |
+        (
+          sum(pg_stat_database_numbackends)
+          /
+          sum(pg_settings_max_connections)
+        ) * 100
+        
+    - record: sli:redis:availability
+      expr: |
+        avg(up{job="redis"}) * 100
+        
+    - record: sli:kubernetes:node_availability
+      expr: |
+        (
+          count(up{job="node-exporter"} == 1)
+          /
+          count(up{job="node-exporter"})
+        ) * 100
+
+---
+# SLO Alert Rules based on Error Budget Burn Rate
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: slo-alert-rules
+  namespace: thinkrank
+  labels:
+    app: prometheus
+    role: slo-alerts
+spec:
+  groups:
+  - name: slo.auth_service.rules
+    interval: 30s
+    rules:
+    # Auth Service SLO Alerts
+    - alert: AuthServiceAvailabilitySLOBreach
+      expr: sli:availability:rate5m{service="auth-service"} < 99.9
+      for: 2m
+      labels:
+        severity: critical
+        service: auth-service
+        slo_type: availability
+      annotations:
+        summary: 'Auth Service availability SLO breach'
+        description: 'Auth Service availability is {{ $value }}%, below SLO of 99.9%'
+        runbook_url: 'https://runbooks.thinkrank.com/slo/auth-availability'
+        
+    - alert: AuthServiceLatencySLOBreach
+      expr: sli:latency:p95:5m{service="auth-service"} > 200
+      for: 5m
+      labels:
+        severity: high
+        service: auth-service
+        slo_type: latency
+      annotations:
+        summary: 'Auth Service latency SLO breach'
+        description: 'Auth Service P95 latency is {{ $value }}ms, above SLO of 200ms'
+        
+    - alert: AuthServiceErrorRateSLOBreach
+      expr: sli:error_rate:5m{service="auth-service"} > 0.1
+      for: 2m
+      labels:
+        severity: high
+        service: auth-service
+        slo_type: error_rate
+      annotations:
+        summary: 'Auth Service error rate SLO breach'
+        description: 'Auth Service error rate is {{ $value }}%, above SLO of 0.1%'
+
+  - name: slo.game_service.rules
+    interval: 30s
+    rules:
+    # Game Service SLO Alerts
+    - alert: GameServiceAvailabilitySLOBreach
+      expr: sli:availability:rate5m{service="game-service"} < 99.5
+      for: 5m
+      labels:
+        severity: high
+        service: game-service
+        slo_type: availability
+      annotations:
+        summary: 'Game Service availability SLO breach'
+        description: 'Game Service availability is {{ $value }}%, below SLO of 99.5%'
+        
+    - alert: GameServiceLatencySLOBreach
+      expr: sli:latency:p95:5m{service="game-service"} > 500
+      for: 10m
+      labels:
+        severity: warning
+        service: game-service
+        slo_type: latency
+      annotations:
+        summary: 'Game Service latency SLO breach'
+        description: 'Game Service P95 latency is {{ $value }}ms, above SLO of 500ms'
+
+  - name: slo.ai_service.rules
+    interval: 30s
+    rules:
+    # AI Service SLO Alerts with Cost Considerations
+    - alert: AIServiceAvailabilitySLOBreach
+      expr: sli:availability:rate5m{service="ai-service"} < 99.0
+      for: 10m
+      labels:
+        severity: warning
+        service: ai-service
+        slo_type: availability
+      annotations:
+        summary: 'AI Service availability SLO breach'
+        description: 'AI Service availability is {{ $value }}%, below SLO of 99%'
+        
+    - alert: AIServiceLatencySLOBreach
+      expr: sli:latency:p95:5m{service="ai-service"} > 2000
+      for: 15m
+      labels:
+        severity: warning
+        service: ai-service
+        slo_type: latency
+      annotations:
+        summary: 'AI Service latency SLO breach'
+        description: 'AI Service P95 latency is {{ $value }}ms, above SLO of 2000ms'
+        
+    - alert: AIServiceCostThresholdExceeded
+      expr: increase(thinkrank_ai_cost_total[1h]) > 100
+      for: 5m
+      labels:
+        severity: high
+        service: ai-service
+        slo_type: cost
+        cost_impact: high
+      annotations:
+        summary: 'AI Service cost threshold exceeded'
+        description: 'AI Service cost is ${{ $value }} in the last hour'
+
+  - name: slo.infrastructure.rules
+    interval: 30s
+    rules:
+    # Infrastructure SLO Alerts
+    - alert: DatabaseAvailabilitySLOBreach
+      expr: sli:database:availability < 99.9
+      for: 1m
+      labels:
+        severity: critical
+        service: postgres
+        slo_type: availability
+      annotations:
+        summary: 'Database availability SLO breach'
+        description: 'Database availability is {{ $value }}%, below SLO of 99.9%'
+        
+    - alert: DatabaseLatencySLOBreach
+      expr: sli:database:latency:p95 > 10
+      for: 5m
+      labels:
+        severity: high
+        service: postgres
+        slo_type: latency
+      annotations:
+        summary: 'Database latency SLO breach'
+        description: 'Database P95 latency is {{ $value }}ms, above SLO of 10ms'
+        
+    - alert: DatabaseConnectionPoolSLOBreach
+      expr: sli:database:connection_pool_usage > 80
+      for: 5m
+      labels:
+        severity: high
+        service: postgres
+        slo_type: connection_pool
+      annotations:
+        summary: 'Database connection pool SLO breach'
+        description: 'Database connection pool usage is {{ $value }}%, above SLO of 80%'
+
+---
+# SLO Dashboard Configuration for Grafana
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDashboard
+metadata:
+  name: slo-dashboard
+  namespace: thinkrank
+spec:
+  grafana:
+    name: thinkrank-grafana
+    namespace: thinkrank
+  json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "ThinkRank SLO Dashboard",
+        "tags": ["slo", "sli", "reliability"],
+        "timezone": "browser",
+        "refresh": "30s",
+        "schemaVersion": 16,
+        "version": 1,
+        "panels": [
+          {
+            "id": 1,
+            "title": "Service Availability SLOs",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sli:availability:rate24h",
+                "legendFormat": "{{ service }} Availability"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 99},
+                    {"color": "green", "value": 99.5}
+                  ]
+                },
+                "unit": "percent",
+                "min": 98,
+                "max": 100
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Service Latency P95 (ms)",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sli:latency:p95:5m",
+                "legendFormat": "{{ service }} P95 Latency"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 500},
+                    {"color": "red", "value": 1000}
+                  ]
+                },
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Error Rate SLIs",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sli:error_rate:5m",
+                "legendFormat": "{{ service }} Error Rate"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 0.5},
+                    {"color": "red", "value": 1.0}
+                  ]
+                },
+                "unit": "percent"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "SLO Error Budget Burn Rate",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "(\n  (1 - sli:availability:rate1m / 100) / (1 - 99.9 / 100)\n) * 100",
+                "legendFormat": "{{ service }} Error Budget Burn Rate"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 2},
+                    {"color": "red", "value": 10}
+                  ]
+                },
+                "unit": "percentunit"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Infrastructure SLOs",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sli:database:availability",
+                "legendFormat": "Database Availability"
+              },
+              {
+                "expr": "sli:redis:availability",
+                "legendFormat": "Redis Availability"
+              },
+              {
+                "expr": "sli:kubernetes:node_availability",
+                "legendFormat": "Node Availability"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 99},
+                    {"color": "green", "value": 99.5}
+                  ]
+                },
+                "unit": "percent"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          }
+        ],
+        "time": {"from": "now-24h", "to": "now"},
+        "timepicker": {
+          "refresh_intervals": ["30s", "1m", "5m", "15m", "30m", "1h"]
+        }
+      }
+    }
+
+---
+# Error Budget Policy Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: error-budget-policy
+  namespace: thinkrank
+data:
+  policy.yaml: |
+    # Error Budget Policy for ThinkRank Services
+    error_budget_policy:
+      # When error budget is exhausted, take these actions
+      actions:
+        - threshold: 0.9  # 90% of error budget consumed
+          actions:
+            - alert: warning
+            - notification: slack
+            - message: "Error budget 90% consumed - monitor closely"
+            
+        - threshold: 1.0  # 100% of error budget consumed
+          actions:
+            - alert: critical
+            - notification: pagerduty
+            - freeze_deployments: true
+            - message: "Error budget exhausted - deployment freeze activated"
+            
+        - threshold: 1.5  # 150% over error budget
+          actions:
+            - alert: critical
+            - notification: pagerduty
+            - rollback_if_recent_deploy: true
+            - message: "Critical: Consider immediate rollback"
+      
+      # Recovery actions when error budget is restored
+      recovery_actions:
+        - threshold: 0.7  # Below 70% consumption
+          actions:
+            - unfreeze_deployments: true
+            - notification: slack
+            - message: "Error budget recovered - deployments resumed"
+      
+      # Service-specific policies
+      services:
+        auth-service:
+          error_budget_window: 30d
+          availability_target: 99.9
+          critical_threshold: 0.8
+          
+        game-service:
+          error_budget_window: 30d
+          availability_target: 99.5
+          critical_threshold: 0.9
+          
+        ai-service:
+          error_budget_window: 30d
+          availability_target: 99.0
+          critical_threshold: 1.0
+          cost_budget_monthly: 5000  # $5000/month

@@ -13,9 +13,22 @@ spec:
       labels:
         app: auth-service
     spec:
+      # Security context for pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
       containers:
       - name: auth-service
         image: thinkrank/auth-service:latest
+        # Security context for container
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
         ports:
         - containerPort: 3001
         env:

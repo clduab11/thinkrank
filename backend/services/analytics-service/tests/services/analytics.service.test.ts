@@ -1,5 +1,10 @@
 import { AnalyticsService } from '../../src/services/analytics.service';
+import { createClient } from '@supabase/supabase-js';
 import { createTestEvent } from '../setup';
+
+// Mock the createClient function
+jest.mock('@supabase/supabase-js');
+const mockCreateClient = createClient as jest.MockedFunction<typeof createClient>;
 
 describe('AnalyticsService', () => {
   let analyticsService: AnalyticsService;
@@ -32,7 +37,7 @@ describe('AnalyticsService', () => {
 
     it('should throw error when database fails', async () => {
       // Mock database failure
-      const mockSupabase = require('@supabase/supabase-js').createClient();
+      const mockSupabase = mockCreateClient();
       mockSupabase.from().insert().select().single.mockResolvedValue({
         data: null,
         error: new Error('Database error')
@@ -197,7 +202,7 @@ describe('AnalyticsService', () => {
 
     it('should handle empty data gracefully', async () => {
       // Mock empty responses
-      const mockSupabase = require('@supabase/supabase-js').createClient();
+      const mockSupabase = mockCreateClient();
       mockSupabase.from().select().eq().gte().lte.mockResolvedValue({
         data: [],
         error: null

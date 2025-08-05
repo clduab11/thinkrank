@@ -1,0 +1,565 @@
+# AlertManager Configuration with Intelligent Alert Rules
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: thinkrank
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'smtp.thinkrank.com:587'
+      smtp_from: 'alerts@thinkrank.com'
+      smtp_auth_username: 'alerts@thinkrank.com'
+      smtp_auth_password: '${SMTP_PASSWORD}'
+      slack_api_url: '${SLACK_WEBHOOK_URL}'
+      pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+      
+    templates:
+    - '/etc/alertmanager/templates/*.tmpl'
+    
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'default'
+      routes:
+      # Critical alerts go to PagerDuty immediately
+      - match:
+          severity: critical
+        receiver: 'pagerduty-critical'
+        group_wait: 0s
+        repeat_interval: 5m
+        continue: true
+        
+      # High severity alerts to Slack with escalation
+      - match:
+          severity: high
+        receiver: 'slack-high-severity'
+        group_wait: 30s
+        repeat_interval: 15m
+        continue: true
+        
+      # Database alerts
+      - match:
+          service: postgres
+        receiver: 'database-alerts'
+        group_wait: 1m
+        repeat_interval: 30m
+        
+      # Auth service alerts (security critical)
+      - match:
+          service: auth-service
+        receiver: 'security-alerts'
+        group_wait: 10s
+        repeat_interval: 10m
+        
+      # Game service alerts
+      - match:
+          service: game-service
+        receiver: 'game-service-alerts'
+        group_wait: 1m
+        repeat_interval: 20m
+        
+      # AI service alerts (performance focused)
+      - match:
+          service: ai-service
+        receiver: 'ai-service-alerts'
+        group_wait: 2m
+        repeat_interval: 30m
+        
+      # Infrastructure alerts
+      - match_re:
+          alertname: 'Node.*|Kubernetes.*|Pod.*'
+        receiver: 'infrastructure-alerts'
+        group_wait: 2m
+        repeat_interval: 1h
+        
+      # Low priority alerts
+      - match:
+          severity: warning
+        receiver: 'slack-warnings'
+        group_wait: 5m
+        repeat_interval: 4h
+        
+    inhibit_rules:
+    # Inhibit warning alerts if critical alert is firing
+    - source_match:
+        severity: 'critical'
+      target_match:
+        severity: 'warning'
+      equal: ['alertname', 'cluster', 'service']
+      
+    # Inhibit high alerts if critical alert is firing
+    - source_match:
+        severity: 'critical'
+      target_match:
+        severity: 'high'
+      equal: ['alertname', 'cluster', 'service']
+      
+    # Inhibit node alerts if cluster alert is firing
+    - source_match_re:
+        alertname: 'KubernetesCluster.*'
+      target_match_re:
+        alertname: 'KubernetesNode.*'
+      equal: ['cluster']
+    
+    receivers:
+    - name: 'default'
+      slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#thinkrank-alerts'
+        title: 'ThinkRank Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Service:* {{ .Labels.service }}
+          {{ end }}
+        
+    - name: 'pagerduty-critical'
+      pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        description: |
+          {{ range .Alerts }}{{ .Annotations.summary }} - {{ .Annotations.description }}{{ end }}
+        details:
+          service: '{{ .GroupLabels.service }}'
+          severity: '{{ .GroupLabels.severity }}'
+          cluster: '{{ .GroupLabels.cluster }}'
+          runbook: '{{ .CommonAnnotations.runbook_url }}'
+        client: 'ThinkRank AlertManager'
+        client_url: 'https://grafana.thinkrank.com'
+        
+    - name: 'slack-high-severity'
+      slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#thinkrank-incidents'
+        color: 'danger'
+        title: ':rotating_light: High Severity Alert'
+        text: |
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          *Dashboard:* https://grafana.thinkrank.com/d/{{ .Annotations.dashboard_id }}
+          {{ end }}
+        actions:
+        - type: button
+          text: 'View Dashboard'
+          url: 'https://grafana.thinkrank.com/d/{{ .CommonAnnotations.dashboard_id }}'
+        - type: button
+          text: 'View Runbook'
+          url: '{{ .CommonAnnotations.runbook_url }}'
+          
+    - name: 'database-alerts'
+      slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#thinkrank-database'
+        color: 'warning'
+        title: ':database: Database Alert'
+        text: |
+          {{ range .Alerts }}
+          *Database:* {{ .Labels.instance }}
+          *Issue:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+      email_configs:
+      - to: 'dba@thinkrank.com'
+        subject: 'Database Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Database alert detected:
+          
+          {{ range .Alerts }}
+          Instance: {{ .Labels.instance }}
+          Summary: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Started: {{ .StartsAt }}
+          {{ end }}
+          
+    - name: 'security-alerts'
+      pagerduty_configs:
+      - service_key: '${PAGERDUTY_SECURITY_KEY}'
+        description: 'Security Alert: {{ .GroupLabels.alertname }}'
+        severity: 'critical'
+      slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#thinkrank-security'
+        color: 'danger'
+        title: ':shield: Security Alert'
+        text: |
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *Security Issue:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          *Immediate Action Required*
+          {{ end }}
+      email_configs:
+      - to: 'security@thinkrank.com,cto@thinkrank.com'
+        subject: 'URGENT: Security Alert - {{ .GroupLabels.alertname }}'
+        body: |
+          URGENT SECURITY ALERT
+          
+          {{ range .Alerts }}
+          Service: {{ .Labels.service }}
+          Summary: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Started: {{ .StartsAt }}
+          {{ end }}
+          
+          Please investigate immediately.
+          
+    - name: 'game-service-alerts'
+      slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#thinkrank-game'
+        color: 'warning'
+        title: ':video_game: Game Service Alert'
+        text: |
+          {{ range .Alerts }}
+          *Game Service Issue:* {{ .Annotations.summary }}
+          *Impact:* {{ .Annotations.description }}
+          *Players Affected:* {{ .Labels.players_affected | default "Unknown" }}
+          {{ end }}
+          
+    - name: 'ai-service-alerts'
+      slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#thinkrank-ai'
+        color: 'warning'
+        title: ':robot_face: AI Service Alert'
+        text: |
+          {{ range .Alerts }}
+          *AI Service:* {{ .Labels.model | default "General" }}
+          *Issue:* {{ .Annotations.summary }}
+          *Performance Impact:* {{ .Annotations.description }}
+          *Cost Impact:* {{ .Labels.cost_impact | default "Unknown" }}
+          {{ end }}
+          
+    - name: 'infrastructure-alerts'
+      slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#thinkrank-infrastructure'
+        color: 'warning'
+        title: ':building_construction: Infrastructure Alert'
+        text: |
+          {{ range .Alerts }}
+          *Component:* {{ .Labels.alertname }}
+          *Node:* {{ .Labels.instance }}
+          *Issue:* {{ .Annotations.summary }}
+          {{ end }}
+          
+    - name: 'slack-warnings'
+      slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#thinkrank-monitoring'
+        color: 'warning'
+        title: ':warning: Warning Alert'
+        text: |
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *Warning:* {{ .Annotations.summary }}
+          {{ end }}
+
+---
+# Prometheus Alert Rules
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: thinkrank-alert-rules
+  namespace: thinkrank
+  labels:
+    app: prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: thinkrank.application.rules
+    interval: 30s
+    rules:
+    # High Error Rate
+    - alert: HighErrorRate
+      expr: sum(rate(http_requests_total{status=~"5.."}[5m])) by (service) / sum(rate(http_requests_total[5m])) by (service) > 0.05
+      for: 2m
+      labels:
+        severity: high
+        service: '{{ $labels.service }}'
+      annotations:
+        summary: 'High error rate detected for {{ $labels.service }}'
+        description: 'Error rate is {{ $value | humanizePercentage }} for service {{ $labels.service }}'
+        runbook_url: 'https://runbooks.thinkrank.com/high-error-rate'
+        dashboard_id: 'thinkrank-application'
+
+    # High Response Time
+    - alert: HighResponseTime
+      expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)) > 2
+      for: 5m
+      labels:
+        severity: warning
+        service: '{{ $labels.service }}'
+      annotations:
+        summary: 'High response time for {{ $labels.service }}'
+        description: '95th percentile response time is {{ $value }}s for service {{ $labels.service }}'
+        runbook_url: 'https://runbooks.thinkrank.com/high-latency'
+
+    # Service Down
+    - alert: ServiceDown
+      expr: up{service=~"auth-service|game-service|ai-service|social-service"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: '{{ $labels.service }}'
+      annotations:
+        summary: 'Service {{ $labels.service }} is down'
+        description: 'Service {{ $labels.service }} has been down for more than 1 minute'
+        runbook_url: 'https://runbooks.thinkrank.com/service-down'
+
+    # High CPU Usage
+    - alert: HighCPUUsage
+      expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'High CPU usage on {{ $labels.instance }}'
+        description: 'CPU usage is {{ $value }}% on {{ $labels.instance }}'
+        
+    # High Memory Usage
+    - alert: HighMemoryUsage
+      expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'High memory usage on {{ $labels.instance }}'
+        description: 'Memory usage is {{ $value }}% on {{ $labels.instance }}'
+
+    # Disk Space Low
+    - alert: DiskSpaceLow
+      expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 85
+      for: 5m
+      labels:
+        severity: high
+      annotations:
+        summary: 'Disk space low on {{ $labels.instance }}'
+        description: 'Disk usage is {{ $value }}% on {{ $labels.instance }} ({{ $labels.mountpoint }})'
+
+  - name: thinkrank.database.rules
+    interval: 30s
+    rules:
+    # Database Connection Pool Exhaustion
+    - alert: DatabaseConnectionPoolExhaustion
+      expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+      for: 2m
+      labels:
+        severity: high
+        service: postgres
+      annotations:
+        summary: 'Database connection pool near exhaustion'
+        description: 'Connection pool is {{ $value | humanizePercentage }} full'
+        runbook_url: 'https://runbooks.thinkrank.com/db-connections'
+
+    # Slow Queries
+    - alert: DatabaseSlowQueries
+      expr: pg_stat_statements_mean_time_ms > 1000
+      for: 5m
+      labels:
+        severity: warning
+        service: postgres
+      annotations:
+        summary: 'Slow database queries detected'
+        description: 'Average query time is {{ $value }}ms'
+
+    # Database Down
+    - alert: DatabaseDown
+      expr: pg_up == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: postgres
+      annotations:
+        summary: 'Database is down'
+        description: 'PostgreSQL database is not responding'
+        runbook_url: 'https://runbooks.thinkrank.com/db-down'
+
+  - name: thinkrank.security.rules
+    interval: 15s
+    rules:
+    # Failed Authentication Attempts
+    - alert: HighFailedAuthAttempts
+      expr: increase(thinkrank_auth_failed_attempts_total[5m]) > 50
+      for: 1m
+      labels:
+        severity: high
+        service: auth-service
+      annotations:
+        summary: 'High number of failed authentication attempts'
+        description: '{{ $value }} failed auth attempts in the last 5 minutes'
+        runbook_url: 'https://runbooks.thinkrank.com/auth-attacks'
+
+    # Suspicious AI API Usage
+    - alert: SuspiciousAIUsage
+      expr: increase(thinkrank_ai_requests_total[10m]) > 1000
+      for: 2m
+      labels:
+        severity: warning
+        service: ai-service
+        cost_impact: high
+      annotations:
+        summary: 'Unusual AI API usage detected'
+        description: '{{ $value }} AI requests in 10 minutes - potential abuse'
+
+  - name: thinkrank.business.rules
+    interval: 60s
+    rules:
+    # Low Active Users
+    - alert: LowActiveUsers
+      expr: thinkrank_active_users_total < 100
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'Low active user count'
+        description: 'Only {{ $value }} active users currently'
+
+    # Game Session Creation Rate Drop
+    - alert: GameSessionCreationDrop
+      expr: rate(thinkrank_game_sessions_started_total[10m]) < 0.1
+      for: 5m
+      labels:
+        severity: high
+        service: game-service
+        players_affected: all
+      annotations:
+        summary: 'Game session creation rate dropped significantly'
+        description: 'Session creation rate: {{ $value }} per second'
+
+---
+# Deployment for AlertManager
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: thinkrank
+  labels:
+    app: alertmanager
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      serviceAccountName: alertmanager
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:v0.26.0
+        args:
+        - '--config.file=/etc/alertmanager/alertmanager.yml'
+        - '--storage.path=/alertmanager'
+        - '--data.retention=120h'
+        - '--cluster.listen-address=0.0.0.0:9094'
+        - '--cluster.peer=alertmanager-0.alertmanager.thinkrank.svc.cluster.local:9094'
+        - '--cluster.peer=alertmanager-1.alertmanager.thinkrank.svc.cluster.local:9094'
+        - '--web.external-url=https://alertmanager.thinkrank.com'
+        ports:
+        - containerPort: 9093
+        - containerPort: 9094
+        env:
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: alertmanager-secrets
+              key: smtp-password
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: alertmanager-secrets
+              key: slack-webhook-url
+        - name: PAGERDUTY_SERVICE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: alertmanager-secrets
+              key: pagerduty-service-key
+        - name: PAGERDUTY_SECURITY_KEY
+          valueFrom:
+            secretKeyRef:
+              name: alertmanager-secrets
+              key: pagerduty-security-key
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alertmanager
+        - name: storage
+          mountPath: /alertmanager
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 512Mi
+            cpu: 500m
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9093
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9093
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: alertmanager-config
+      - name: storage
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: thinkrank
+  labels:
+    app: alertmanager
+spec:
+  ports:
+  - port: 9093
+    targetPort: 9093
+    name: web
+  - port: 9094
+    targetPort: 9094
+    name: mesh
+  selector:
+    app: alertmanager
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alertmanager
+  namespace: thinkrank
+
+---
+# Secret for AlertManager credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-secrets
+  namespace: thinkrank
+type: Opaque
+stringData:
+  smtp-password: "CHANGE_ME_IN_PRODUCTION"
+  slack-webhook-url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+  pagerduty-service-key: "YOUR_PAGERDUTY_SERVICE_KEY"
+  pagerduty-security-key: "YOUR_PAGERDUTY_SECURITY_KEY"

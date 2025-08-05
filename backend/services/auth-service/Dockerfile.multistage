@@ -1,0 +1,104 @@
+# Multi-stage Dockerfile for Auth Service - Optimized for Security and Size
+ARG NODE_VERSION=20.10.0
+ARG ALPINE_VERSION=3.19
+
+# Stage 1: Base image with security updates
+FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS base
+RUN apk update && apk upgrade && apk add --no-cache \
+    dumb-init \
+    ca-certificates \
+    && rm -rf /var/cache/apk/*
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001 -G nodejs
+
+# Stage 2: Dependencies installation
+FROM base AS deps
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY backend/shared/package*.json ./backend/shared/
+COPY backend/services/auth-service/package*.json ./backend/services/auth-service/
+
+# Install dependencies with security audit
+RUN npm ci --only=production --audit --audit-level moderate && \
+    npm cache clean --force
+
+# Install dev dependencies for build
+RUN npm ci --only=development
+
+# Stage 3: Build stage
+FROM base AS builder
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/backend/shared/node_modules ./backend/shared/node_modules
+COPY --from=deps /app/backend/services/auth-service/node_modules ./backend/services/auth-service/node_modules
+
+# Copy source code
+COPY backend/shared/ ./backend/shared/
+COPY backend/services/auth-service/ ./backend/services/auth-service/
+COPY tsconfig.json ./
+COPY package*.json ./
+
+# Build the application
+RUN npm run build --workspace=backend/services/auth-service
+
+# Remove dev dependencies after build
+RUN npm prune --production
+
+# Stage 4: Security scanning (optional in CI/CD)
+FROM aquasec/trivy:latest AS security
+WORKDIR /scan
+COPY --from=builder /app ./
+RUN trivy fs --exit-code 0 --severity HIGH,CRITICAL --no-progress .
+
+# Stage 5: Runtime stage
+FROM base AS runtime
+WORKDIR /app
+
+# Install runtime security tools
+RUN apk add --no-cache \
+    curl \
+    && rm -rf /var/cache/apk/*
+
+# Copy built application and production dependencies
+COPY --from=builder --chown=nextjs:nodejs /app/backend/services/auth-service/dist ./dist
+COPY --from=builder --chown=nextjs:nodejs /app/backend/shared/dist ./shared
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/backend/services/auth-service/package*.json ./
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /tmp /app/logs && \
+    chown -R nextjs:nodejs /tmp /app/logs && \
+    chmod 755 /tmp /app/logs
+
+# Security hardening
+RUN rm -rf /usr/local/lib/node_modules/npm && \
+    rm -rf /usr/local/bin/npm && \
+    rm -rf /usr/local/bin/npx
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3001/health || exit 1
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
+EXPOSE 3001
+
+# Labels for metadata
+LABEL maintainer="ThinkRank Team <dev@thinkrank.com>" \
+      version="1.0.0" \
+      description="ThinkRank Auth Service" \
+      org.opencontainers.image.source="https://github.com/thinkrank/thinkrank" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="1.0.0"
+
+# Start the application with dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/index.js"]

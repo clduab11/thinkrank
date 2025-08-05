@@ -13,9 +13,22 @@ spec:
       labels:
         app: game-service
     spec:
+      # Security context for pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
       containers:
       - name: game-service
         image: thinkrank/game-service:latest
+        # Security context for container
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
         ports:
         - containerPort: 3002
         env:

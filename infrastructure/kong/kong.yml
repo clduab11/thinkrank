@@ -1,0 +1,588 @@
+# Kong API Gateway Configuration for ThinkRank Phase 2
+# Declarative configuration with advanced routing, circuit breakers, and transformations
+
+_format_version: "3.0"
+_transform: true
+
+# Services - Backend microservices
+services:
+  # Unified AI Domain Service
+  - name: ai-domain-service
+    url: http://ai-domain-service:3002
+    protocol: http
+    host: ai-domain-service
+    port: 3002
+    path: /
+    connect_timeout: 5000
+    write_timeout: 60000
+    read_timeout: 60000
+    retries: 3
+    tags:
+      - ai
+      - domain
+      - phase2
+
+  # Auth Service
+  - name: auth-service
+    url: http://auth-service:3001
+    protocol: http
+    host: auth-service
+    port: 3001
+    path: /
+    connect_timeout: 3000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    tags:
+      - auth
+      - security
+
+  # Analytics Service
+  - name: analytics-service
+    url: http://analytics-service:3004
+    protocol: http
+    host: analytics-service
+    port: 3004
+    path: /
+    connect_timeout: 5000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    tags:
+      - analytics
+      - metrics
+
+  # Social Service
+  - name: social-service
+    url: http://social-service:3005
+    protocol: http
+    host: social-service
+    port: 3005
+    path: /
+    connect_timeout: 5000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    tags:
+      - social
+      - gamification
+
+  # Game Service
+  - name: game-service
+    url: http://game-service:3006
+    protocol: http
+    host: game-service
+    port: 3006
+    path: /
+    connect_timeout: 5000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    tags:
+      - game
+      - gameplay
+
+  # Realtime Service
+  - name: realtime-service
+    url: http://realtime-service:3007
+    protocol: http
+    host: realtime-service
+    port: 3007
+    path: /
+    connect_timeout: 3000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    tags:
+      - realtime
+      - websocket
+
+# Routes - API endpoint routing with advanced patterns
+routes:
+  # AI Domain Service Routes
+  - name: ai-content-generation
+    service: ai-domain-service
+    paths:
+      - /api/v1/ai/content
+    methods:
+      - POST
+    strip_path: false
+    preserve_host: false
+    tags:
+      - ai
+      - content
+      - generation
+
+  - name: ai-detection
+    service: ai-domain-service
+    paths:
+      - /api/v1/ai/detection
+    methods:
+      - POST
+    strip_path: false
+    preserve_host: false
+    tags:
+      - ai
+      - detection
+
+  - name: ai-research-problems
+    service: ai-domain-service
+    paths:
+      - /api/v1/ai/research
+    methods:
+      - GET
+      - POST
+      - PUT
+    strip_path: false
+    preserve_host: false
+    tags:
+      - ai
+      - research
+
+  - name: ai-health
+    service: ai-domain-service
+    paths:
+      - /api/v1/ai/health
+    methods:
+      - GET
+    strip_path: false
+    preserve_host: false
+    tags:
+      - ai
+      - health
+
+  # Auth Service Routes
+  - name: auth-login
+    service: auth-service
+    paths:
+      - /api/v1/auth/login
+    methods:
+      - POST
+    strip_path: false
+    preserve_host: false
+    tags:
+      - auth
+      - login
+
+  - name: auth-register
+    service: auth-service
+    paths:
+      - /api/v1/auth/register
+    methods:
+      - POST
+    strip_path: false
+    preserve_host: false
+    tags:
+      - auth
+      - register
+
+  - name: auth-verify
+    service: auth-service
+    paths:
+      - /api/v1/auth/verify
+    methods:
+      - GET
+      - POST
+    strip_path: false
+    preserve_host: false
+    tags:
+      - auth
+      - verify
+
+  # Analytics Routes
+  - name: analytics-events
+    service: analytics-service
+    paths:
+      - /api/v1/analytics/events
+    methods:
+      - POST
+    strip_path: false
+    preserve_host: false
+    tags:
+      - analytics
+      - events
+
+  - name: analytics-dashboard
+    service: analytics-service
+    paths:
+      - /api/v1/analytics/dashboard
+    methods:
+      - GET
+    strip_path: false
+    preserve_host: false
+    tags:
+      - analytics
+      - dashboard
+
+  # Social Service Routes
+  - name: social-leaderboard
+    service: social-service
+    paths:
+      - /api/v1/social/leaderboard
+    methods:
+      - GET
+    strip_path: false
+    preserve_host: false
+    tags:
+      - social
+      - leaderboard
+
+  - name: social-achievements
+    service: social-service
+    paths:
+      - /api/v1/social/achievements
+    methods:
+      - GET
+      - POST
+    strip_path: false
+    preserve_host: false
+    tags:
+      - social
+      - achievements
+
+  # Game Service Routes
+  - name: game-sessions
+    service: game-service
+    paths:
+      - /api/v1/game/sessions
+    methods:
+      - GET
+      - POST
+      - PUT
+    strip_path: false
+    preserve_host: false
+    tags:
+      - game
+      - sessions
+
+  - name: game-challenges
+    service: game-service
+    paths:
+      - /api/v1/game/challenges
+    methods:
+      - GET
+      - POST
+    strip_path: false
+    preserve_host: false
+    tags:
+      - game
+      - challenges
+
+  # Realtime Routes
+  - name: realtime-websocket
+    service: realtime-service
+    paths:
+      - /api/v1/realtime/ws
+    methods:
+      - GET
+    strip_path: false
+    preserve_host: false
+    tags:
+      - realtime
+      - websocket
+
+# Global Plugins
+plugins:
+  # Request/Response Logging
+  - name: file-log
+    config:
+      path: /var/log/kong/access.log
+      reopen: true
+
+  # Correlation ID for distributed tracing
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-ID
+      generator: uuid#counter
+      echo_downstream: true
+
+  # Security Headers
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - "X-Content-Type-Options: nosniff"
+          - "X-Frame-Options: DENY"
+          - "X-XSS-Protection: 1; mode=block"
+          - "Strict-Transport-Security: max-age=31536000; includeSubDomains"
+
+  # Rate Limiting (Global)
+  - name: rate-limiting
+    config:
+      minute: 1000
+      hour: 10000
+      policy: cluster
+      fault_tolerant: true
+      hide_client_headers: false
+
+# Service-specific Plugins
+# AI Domain Service Plugins
+- service: ai-domain-service
+  plugins:
+    # Circuit Breaker for AI operations
+    - name: proxy-cache
+      config:
+        response_code:
+          - 200
+        request_method:
+          - GET
+        content_type:
+          - "application/json"
+        cache_ttl: 300
+        strategy: memory
+
+    # Request Size Limiting for file uploads
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 10
+
+    # AI-specific Rate Limiting
+    - name: rate-limiting
+      config:
+        minute: 100
+        hour: 1000
+        policy: cluster
+        fault_tolerant: true
+
+    # Request/Response Transformation for AI endpoints
+    - name: request-transformer
+      config:
+        add:
+          headers:
+            - "X-Service-Version: 2.0"
+            - "X-AI-Domain: true"
+
+    # Circuit Breaker simulation with health checks
+    - name: pre-function
+      config:
+        certificate: |
+          -- Circuit breaker logic
+          local health_check_url = "http://ai-domain-service:3002/health"
+          local httpc = require("resty.http").new()
+          
+          local res, err = httpc:request_uri(health_check_url, {
+            method = "GET",
+            timeout = 2000,
+          })
+          
+          if not res or res.status >= 500 then
+            kong.log.err("AI service health check failed")
+            return kong.response.exit(503, {
+              error = "AI service temporarily unavailable",
+              retry_after = 30
+            })
+          end
+
+# Auth Service Plugins
+- service: auth-service
+  plugins:
+    # JWT Validation
+    - name: jwt
+      config:
+        uri_param_names:
+          - token
+        cookie_names:
+          - auth_token
+        claims_to_verify:
+          - exp
+          - iat
+        key_claim_name: iss
+
+    # Enhanced Rate Limiting for auth endpoints
+    - name: rate-limiting
+      config:
+        minute: 50
+        hour: 500
+        policy: cluster
+        fault_tolerant: true
+
+    # Request Size Limiting
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+
+# Analytics Service Plugins
+- service: analytics-service
+  plugins:
+    # Authentication required
+    - name: key-auth
+      config:
+        key_names:
+          - X-API-Key
+        hide_credentials: true
+
+    # Higher rate limits for analytics
+    - name: rate-limiting
+      config:
+        minute: 500
+        hour: 5000
+        policy: cluster
+        fault_tolerant: true
+
+    # Request buffering for high throughput
+    - name: request-transformer
+      config:
+        add:
+          headers:
+            - "X-Analytics-Version: 1.0"
+
+# Route-specific Plugins
+# AI Content Generation - Enhanced limits and monitoring
+- route: ai-content-generation
+  plugins:
+    # Stricter rate limiting for resource-intensive operations
+    - name: rate-limiting
+      config:
+        minute: 10
+        hour: 100
+        policy: cluster
+        fault_tolerant: true
+
+    # Request validation
+    - name: request-validator
+      config:
+        body_schema: |
+          {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["text", "image"]},
+              "difficulty": {"type": "integer", "minimum": 1, "maximum": 10},
+              "topic": {"type": "string", "maxLength": 200},
+              "userId": {"type": "string"},
+              "provider": {"type": "string", "enum": ["openai", "anthropic"]}
+            },
+            "required": ["type", "difficulty", "topic", "userId"]
+          }
+
+# AI Detection - Medium rate limits
+- route: ai-detection
+  plugins:
+    - name: rate-limiting
+      config:
+        minute: 50
+        hour: 500
+        policy: cluster
+        fault_tolerant: true
+
+# Auth routes - Security focused
+- route: auth-login
+  plugins:
+    # Strict rate limiting for login attempts
+    - name: rate-limiting
+      config:
+        minute: 5
+        hour: 50
+        policy: cluster
+        fault_tolerant: true
+
+    # Bot protection
+    - name: bot-detection
+      config:
+        allow:
+          - "Googlebot"
+        deny:
+          - "BadBot"
+
+# Consumer definitions for service-to-service authentication
+consumers:
+  - username: analytics-service-client
+    keyauth_credentials:
+      - key: analytics-service-key-123
+    tags:
+      - service
+      - analytics
+
+  - username: game-service-client
+    keyauth_credentials:
+      - key: game-service-key-456
+    tags:
+      - service
+      - game
+
+  - username: social-service-client
+    keyauth_credentials:
+      - key: social-service-key-789
+    tags:
+      - service
+      - social
+
+# Upstreams for load balancing and health checks
+upstreams:
+  - name: ai-domain-upstream
+    algorithm: round-robin
+    hash_on: none
+    hash_fallback: none
+    healthchecks:
+      active:
+        healthy:
+          interval: 10
+          successes: 3
+        unhealthy:
+          interval: 10
+          timeouts: 3
+          http_failures: 3
+        http_path: /health
+        timeout: 5
+      passive:
+        healthy:
+          successes: 3
+        unhealthy:
+          timeouts: 3
+          http_failures: 3
+    tags:
+      - ai
+      - domain
+
+  - name: auth-upstream
+    algorithm: round-robin
+    healthchecks:
+      active:
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 10
+          timeouts: 2
+          http_failures: 2
+        http_path: /health
+        timeout: 3
+    tags:
+      - auth
+
+# Targets for upstreams
+targets:
+  - upstream: ai-domain-upstream
+    target: ai-domain-service:3002
+    weight: 100
+    tags:
+      - ai
+      - primary
+
+  - upstream: auth-upstream
+    target: auth-service:3001
+    weight: 100
+    tags:
+      - auth
+      - primary
+
+# Certificates for HTTPS (if needed)
+certificates:
+  - cert: |
+      -----BEGIN CERTIFICATE-----
+      # SSL Certificate for thinkrank.com
+      -----END CERTIFICATE-----
+    key: |
+      -----BEGIN PRIVATE KEY-----
+      # Private key
+      -----END PRIVATE KEY-----
+    tags:
+      - ssl
+      - production
+
+# SNI configuration
+snis:
+  - name: thinkrank.com
+    certificate: # Reference to certificate
+    tags:
+      - domain
+      - ssl

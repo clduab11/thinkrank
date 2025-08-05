@@ -30,7 +30,7 @@ export interface PerformanceMetric {
   userId: string;
   metricType: string;
   value: number;
-  context?: any;
+  context?: PerformanceContext;
   timestamp: Date;
 }
 
@@ -39,7 +39,7 @@ export interface ErrorEvent {
   errorType: string;
   errorMessage: string;
   stackTrace?: string;
-  context?: any;
+  context?: ErrorContext;
   timestamp: Date;
   userAgent?: string;
   ip?: string;

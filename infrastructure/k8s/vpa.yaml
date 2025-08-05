@@ -1,0 +1,115 @@
+# Vertical Pod Autoscaler Configuration for ThinkRank Services
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: auth-service-vpa
+  namespace: thinkrank
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: auth-service
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+      maxAllowed:
+        cpu: 2
+        memory: 4Gi
+      controlledResources: ["cpu", "memory"]
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: game-service-vpa
+  namespace: thinkrank
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: game-service
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: game-service
+      minAllowed:
+        cpu: 200m
+        memory: 256Mi
+      maxAllowed:
+        cpu: 4
+        memory: 8Gi
+      controlledResources: ["cpu", "memory"]
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ai-service-vpa
+  namespace: thinkrank
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-service
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: ai-service
+      minAllowed:
+        cpu: 500m
+        memory: 1Gi
+      maxAllowed:
+        cpu: 8
+        memory: 16Gi
+      controlledResources: ["cpu", "memory"]
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: social-service-vpa
+  namespace: thinkrank
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: social-service
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: social-service
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+      maxAllowed:
+        cpu: 2
+        memory: 4Gi
+      controlledResources: ["cpu", "memory"]
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: frontend-vpa
+  namespace: thinkrank
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: frontend
+      minAllowed:
+        cpu: 50m
+        memory: 64Mi
+      maxAllowed:
+        cpu: 1
+        memory: 2Gi
+      controlledResources: ["cpu", "memory"]

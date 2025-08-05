@@ -59,7 +59,7 @@ describe('Analytics Routes', () => {
 
     it('should handle service errors gracefully', async () => {
       // Mock service to throw error
-      const { AnalyticsService } = require('../../src/services/analytics.service');
+      const { AnalyticsService } = await import('../../src/services/analytics.service');
       const mockService = AnalyticsService.mock.results[0].value;
       mockService.trackEvent.mockRejectedValue(new Error('Database error'));
 
@@ -253,7 +253,7 @@ describe('Analytics Routes', () => {
 
     it('should handle service errors gracefully', async () => {
       // Mock service to throw error
-      const { AnalyticsService } = require('../../src/services/analytics.service');
+      const { AnalyticsService } = await import('../../src/services/analytics.service');
       const mockService = AnalyticsService.mock.results[0].value;
       mockService.getUserSummary.mockRejectedValue(new Error('Database error'));
 

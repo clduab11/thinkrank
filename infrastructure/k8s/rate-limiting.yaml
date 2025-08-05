@@ -1,0 +1,357 @@
+# Distributed Rate Limiting with Redis and API Gateway
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rate-limiting-config
+  namespace: thinkrank
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    
+    http {
+        # Redis connection for distributed rate limiting
+        upstream redis_backend {
+            server redis-encrypted:6380;
+            keepalive 32;
+        }
+        
+        # Rate limiting zones
+        limit_req_zone $binary_remote_addr zone=global:10m rate=100r/m;
+        limit_req_zone $binary_remote_addr zone=api:10m rate=1000r/m;
+        limit_req_zone $binary_remote_addr zone=auth:10m rate=60r/m;
+        limit_req_zone $binary_remote_addr zone=game:10m rate=300r/m;
+        limit_req_zone $binary_remote_addr zone=social:10m rate=200r/m;
+        
+        # Connection limiting
+        limit_conn_zone $binary_remote_addr zone=conn_limit_per_ip:10m;
+        limit_conn_zone $server_name zone=conn_limit_per_server:10m;
+        
+        # DDoS protection patterns
+        map $request_uri $is_attack {
+            ~*"/(wp-|admin|phpmyadmin)" 1;
+            ~*"\.(asp|aspx|php)$" 1;
+            default 0;
+        }
+        
+        # Geo-blocking for high-risk regions
+        geo $blocked_country {
+            default 0;
+            # Add specific country blocks as needed
+            # 1.2.3.0/24 1;  # Example block
+        }
+        
+        # Bot detection
+        map $http_user_agent $is_bot {
+            ~*"(bot|crawler|spider|scraper)" 1;
+            ~*"(curl|wget|python|java)" 1;
+            default 0;
+        }
+        
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss: https:;" always;
+        
+        server {
+            listen 80;
+            server_name _;
+            
+            # Block attacks immediately
+            if ($is_attack) {
+                return 444;
+            }
+            
+            # Block banned countries
+            if ($blocked_country) {
+                return 403;
+            }
+            
+            # Connection limits
+            limit_conn conn_limit_per_ip 20;
+            limit_conn conn_limit_per_server 1000;
+            
+            # Global rate limiting
+            limit_req zone=global burst=50 nodelay;
+            
+            # Health checks (no rate limiting)
+            location /health {
+                access_log off;
+                proxy_pass http://backend;
+            }
+            
+            # Authentication endpoints (strict rate limiting)
+            location /api/auth {
+                limit_req zone=auth burst=10 nodelay;
+                limit_req_status 429;
+                
+                # Additional security for auth
+                client_body_buffer_size 1K;
+                client_header_buffer_size 1k;
+                client_max_body_size 1k;
+                large_client_header_buffers 2 1k;
+                
+                proxy_pass http://auth-service:3001;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # Game API endpoints
+            location /api/game {
+                limit_req zone=game burst=30 nodelay;
+                limit_req_status 429;
+                
+                proxy_pass http://game-service:3002;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # Social API endpoints
+            location /api/social {
+                limit_req zone=social burst=20 nodelay;
+                limit_req_status 429;
+                
+                proxy_pass http://social-service:3003;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # General API endpoints
+            location /api/ {
+                limit_req zone=api burst=100 nodelay;
+                limit_req_status 429;
+                
+                # Bot protection
+                if ($is_bot) {
+                    return 403;
+                }
+                
+                proxy_pass http://api-gateway:3000;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                
+                # Timeout settings
+                proxy_connect_timeout 5s;
+                proxy_send_timeout 10s;
+                proxy_read_timeout 10s;
+            }
+            
+            # WebSocket connections (special handling)
+            location /ws/ {
+                limit_req zone=global burst=10 nodelay;
+                
+                proxy_pass http://realtime-service:3005;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                
+                # WebSocket timeout
+                proxy_read_timeout 3600s;
+                proxy_send_timeout 3600s;
+            }
+            
+            # Static content (cached)
+            location /static/ {
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+                proxy_pass http://frontend:80;
+            }
+            
+            # Default location
+            location / {
+                limit_req zone=global burst=20 nodelay;
+                proxy_pass http://frontend:80;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # Custom error pages
+            error_page 429 @rate_limit;
+            location @rate_limit {
+                return 429 '{"error":"Rate limit exceeded","retry_after":60}';
+                add_header Content-Type application/json always;
+            }
+            
+            error_page 403 @forbidden;
+            location @forbidden {
+                return 403 '{"error":"Access forbidden"}';
+                add_header Content-Type application/json always;
+            }
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rate-limiter
+  namespace: thinkrank
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rate-limiter
+  template:
+    metadata:
+      labels:
+        app: rate-limiter
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 101
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: rate-limiting-config
+      - name: cache
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rate-limiter
+  namespace: thinkrank
+spec:
+  selector:
+    app: rate-limiter
+  ports:
+  - port: 80
+    targetPort: 80
+  type: LoadBalancer
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:region:account:certificate/cert-id"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+---
+# Advanced DDoS Protection with Fail2Ban-style behavior
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ddos-protection
+  namespace: thinkrank
+spec:
+  selector:
+    matchLabels:
+      app: ddos-protection
+  template:
+    metadata:
+      labels:
+        app: ddos-protection
+    spec:
+      hostNetwork: true
+      containers:
+      - name: ddos-detector
+        image: alpine:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache iptables
+          
+          # Monitor for DDoS patterns
+          while true; do
+            # Check for high connection rates
+            netstat -an | grep :80 | grep SYN_RECV | wc -l > /tmp/syn_count
+            
+            SYN_COUNT=$(cat /tmp/syn_count)
+            if [ $SYN_COUNT -gt 100 ]; then
+              echo "High SYN flood detected: $SYN_COUNT connections"
+              # Implement SYN flood protection
+              echo 1 > /proc/sys/net/ipv4/tcp_syncookies
+            fi
+            
+            # Check for suspicious IPs
+            netstat -an | awk '{print $5}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:' | \
+            cut -d: -f1 | sort | uniq -c | sort -nr | head -10 | \
+            while read count ip; do
+              if [ $count -gt 50 ]; then
+                echo "Blocking suspicious IP: $ip ($count connections)"
+                iptables -I INPUT -s $ip -j DROP 2>/dev/null || true
+              fi
+            done
+            
+            sleep 10
+          done
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+---
+# IP whitelist for admin access
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ip-whitelist
+  namespace: thinkrank
+data:
+  admin-ips.conf: |
+    # Admin IP whitelist
+    10.0.0.0/8;
+    172.16.0.0/12;
+    192.168.0.0/16;
+    # Add specific admin IPs here
+    # 203.0.113.0/24;

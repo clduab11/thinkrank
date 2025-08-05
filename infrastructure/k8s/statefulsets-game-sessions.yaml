@@ -1,0 +1,235 @@
+# StatefulSet for Persistent Game Session Management
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: game-session-store
+  namespace: thinkrank
+  labels:
+    app: game-session-store
+    component: persistence
+spec:
+  replicas: 3
+  serviceName: game-session-store-headless
+  selector:
+    matchLabels:
+      app: game-session-store
+  template:
+    metadata:
+      labels:
+        app: game-session-store
+        component: persistence
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: game-session-store
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: session-manager
+        image: redis:7.2-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        - containerPort: 8080
+          name: metrics
+        env:
+        - name: REDIS_CONFIG_FILE
+          value: /etc/redis/redis.conf
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1
+            memory: 2Gi
+        volumeMounts:
+        - name: redis-config
+          mountPath: /etc/redis
+        - name: session-data
+          mountPath: /data
+        - name: redis-tmp
+          mountPath: /tmp
+        livenessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 3
+      - name: session-exporter
+        image: oliver006/redis_exporter:v1.55.0
+        ports:
+        - containerPort: 9121
+          name: metrics
+        env:
+        - name: REDIS_ADDR
+          value: "localhost:6379"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+      volumes:
+      - name: redis-config
+        configMap:
+          name: game-session-redis-config
+      - name: redis-tmp
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: session-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: gp2-encrypted
+      resources:
+        requests:
+          storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: game-session-store-headless
+  namespace: thinkrank
+  labels:
+    app: game-session-store
+spec:
+  clusterIP: None
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+  - port: 9121
+    targetPort: 9121
+    name: metrics
+  selector:
+    app: game-session-store
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: game-session-store
+  namespace: thinkrank
+  labels:
+    app: game-session-store
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9121"
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+  - port: 9121
+    targetPort: 9121
+    name: metrics
+  selector:
+    app: game-session-store
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: game-session-redis-config
+  namespace: thinkrank
+data:
+  redis.conf: |
+    # Game Session Redis Configuration
+    port 6379
+    bind 0.0.0.0
+    
+    # Memory optimization
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # Logging
+    loglevel notice
+    logfile ""
+    
+    # Security
+    protected-mode yes
+    
+    # Performance
+    tcp-keepalive 300
+    timeout 0
+    tcp-backlog 511
+    
+    # Game session specific settings
+    hash-max-ziplist-entries 512
+    hash-max-ziplist-value 64
+    
+    # Enable key expiration for session management
+    notify-keyspace-events Ex
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: game-session-store
+  namespace: thinkrank
+  labels:
+    app: game-session-store
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: game-session-store-network-policy
+  namespace: thinkrank
+spec:
+  podSelector:
+    matchLabels:
+      app: game-session-store
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: game-service
+    - podSelector:
+        matchLabels:
+          app: ai-service
+    ports:
+    - protocol: TCP
+      port: 6379
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 9121
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

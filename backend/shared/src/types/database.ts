@@ -19,8 +19,8 @@ export interface User extends BaseEntity {
   username: string;
   password_hash: string;
   subscription_tier: SubscriptionTier;
-  profile_data: Record<string, any>;
-  preferences: Record<string, any>;
+  profile_data: Record<string, unknown>;
+  preferences: Record<string, unknown>;
   is_active: boolean;
   email_verified: boolean;
   last_login_at?: string;
@@ -49,7 +49,7 @@ export interface Subscription extends BaseEntity {
   stripe_subscription_id?: string;
   stripe_customer_id?: string;
   status: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 // Game progress entity
@@ -75,11 +75,11 @@ export interface AIResearchProblem extends BaseEntity {
   title: string;
   description?: string;
   difficulty_level: number;
-  problem_data: Record<string, any>;
-  validation_criteria: Record<string, any>;
-  expected_solution_format: Record<string, any>;
+  problem_data: Record<string, unknown>;
+  validation_criteria: Record<string, unknown>;
+  expected_solution_format: Record<string, unknown>;
   tags: string[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   active: boolean;
   total_contributions: number;
   quality_threshold: number;
@@ -90,15 +90,15 @@ export interface ResearchContribution extends BaseEntity {
   contribution_id: string;
   user_id: string;
   problem_id: string;
-  solution_data: Record<string, any>;
+  solution_data: Record<string, unknown>;
   validation_status: ValidationStatus;
   quality_score?: number;
   confidence_score?: number;
   time_spent_seconds?: number;
   submission_method: string;
-  peer_reviews: any[];
-  research_impact: Record<string, any>;
-  feedback_received: Record<string, any>;
+  peer_reviews: Record<string, unknown>[];
+  research_impact: Record<string, unknown>;
+  feedback_received: Record<string, unknown>;
   points_awarded: number;
   submitted_at: string;
   validated_at?: string;
@@ -112,7 +112,7 @@ export interface SocialInteraction extends BaseEntity {
   target_type?: string;
   target_id?: string;
   content?: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 // Game session entity
@@ -128,8 +128,8 @@ export interface GameSession extends BaseEntity {
   average_response_time?: number;
   platform?: string;
   app_version?: string;
-  device_info: Record<string, any>;
-  session_data: Record<string, any>;
+  device_info: Record<string, unknown>;
+  session_data: Record<string, unknown>;
 }
 
 // Analytics event entity
@@ -139,7 +139,7 @@ export interface AnalyticsEvent {
   session_id?: string;
   event_type: string;
   event_name: string;
-  event_data: Record<string, any>;
+  event_data: Record<string, unknown>;
   platform?: string;
   app_version?: string;
   user_agent?: string;
@@ -153,7 +153,7 @@ export interface QueryOptions {
   offset?: number;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
 }
 
 // Pagination result

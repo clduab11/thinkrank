@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using Newtonsoft.Json;
 using ThinkRank.Core;
+using ThinkRank.Security;
 
 namespace ThinkRank.API
 {
@@ -434,10 +435,26 @@ namespace ThinkRank.API
         {
             if (gameConfig.rememberUserLogin)
             {
-                PlayerPrefs.SetString("AccessToken", accessToken ?? "");
-                PlayerPrefs.SetString("RefreshToken", refreshToken ?? "");
-                PlayerPrefs.SetString("TokenExpiry", tokenExpiryTime.ToBinary().ToString());
-                PlayerPrefs.Save();
+                try
+                {
+                    // Use SecureStorage instead of insecure PlayerPrefs
+                    bool accessTokenStored = SecureStorage.SetSecureString("AccessToken", accessToken ?? "");
+                    bool refreshTokenStored = SecureStorage.SetSecureString("RefreshToken", refreshToken ?? "");
+                    bool expiryStored = SecureStorage.SetSecureString("TokenExpiry", tokenExpiryTime.ToBinary().ToString());
+                    
+                    if (!accessTokenStored || !refreshTokenStored || !expiryStored)
+                    {
+                        Debug.LogError("[APIManager] Failed to store authentication data securely");
+                    }
+                    else
+                    {
+                        Debug.Log("[APIManager] Authentication data stored securely");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[APIManager] Error saving authentication data: {e.Message}");
+                }
             }
         }
 
@@ -445,23 +462,71 @@ namespace ThinkRank.API
         {
             if (gameConfig.rememberUserLogin)
             {
-                accessToken = PlayerPrefs.GetString("AccessToken", "");
-                refreshToken = PlayerPrefs.GetString("RefreshToken", "");
-
-                string expiryString = PlayerPrefs.GetString("TokenExpiry", "");
-                if (!string.IsNullOrEmpty(expiryString) && long.TryParse(expiryString, out long expiryBinary))
+                try
                 {
-                    tokenExpiryTime = DateTime.FromBinary(expiryBinary);
+                    // Use SecureStorage instead of insecure PlayerPrefs
+                    accessToken = SecureStorage.GetSecureString("AccessToken", "");
+                    refreshToken = SecureStorage.GetSecureString("RefreshToken", "");
+
+                    string expiryString = SecureStorage.GetSecureString("TokenExpiry", "");
+                    if (!string.IsNullOrEmpty(expiryString) && long.TryParse(expiryString, out long expiryBinary))
+                    {
+                        tokenExpiryTime = DateTime.FromBinary(expiryBinary);
+                    }
+                    
+                    if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken))
+                    {
+                        Debug.Log("[APIManager] Authentication data loaded securely");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[APIManager] Error loading authentication data: {e.Message}");
+                    // Clear potentially corrupted data
+                    accessToken = "";
+                    refreshToken = "";
+                    tokenExpiryTime = DateTime.MinValue;
                 }
             }
         }
 
         private void ClearAuthenticationData()
         {
-            PlayerPrefs.DeleteKey("AccessToken");
-            PlayerPrefs.DeleteKey("RefreshToken");
-            PlayerPrefs.DeleteKey("TokenExpiry");
-            PlayerPrefs.Save();
+            try
+            {
+                // Use SecureStorage instead of insecure PlayerPrefs
+                bool accessTokenDeleted = SecureStorage.DeleteSecureKey("AccessToken");
+                bool refreshTokenDeleted = SecureStorage.DeleteSecureKey("RefreshToken");
+                bool expiryDeleted = SecureStorage.DeleteSecureKey("TokenExpiry");
+                
+                // Also clear any legacy PlayerPrefs data for security migration
+                if (PlayerPrefs.HasKey("AccessToken"))
+                {
+                    PlayerPrefs.DeleteKey("AccessToken");
+                }
+                if (PlayerPrefs.HasKey("RefreshToken"))
+                {
+                    PlayerPrefs.DeleteKey("RefreshToken");
+                }
+                if (PlayerPrefs.HasKey("TokenExpiry"))
+                {
+                    PlayerPrefs.DeleteKey("TokenExpiry");
+                }
+                PlayerPrefs.Save();
+                
+                if (accessTokenDeleted && refreshTokenDeleted && expiryDeleted)
+                {
+                    Debug.Log("[APIManager] Authentication data cleared securely");
+                }
+                else
+                {
+                    Debug.LogWarning("[APIManager] Some authentication data may not have been cleared");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[APIManager] Error clearing authentication data: {e.Message}");
+            }
         }
 
         #endregion

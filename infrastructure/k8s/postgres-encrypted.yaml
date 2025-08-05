@@ -1,0 +1,343 @@
+# PostgreSQL with Transparent Data Encryption (TDE) and field-level encryption
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-tde-config
+  namespace: thinkrank
+data:
+  postgresql.conf: |
+    # Transparent Data Encryption Configuration
+    shared_preload_libraries = 'pg_tde'
+    
+    # Enable TDE for all databases
+    tde.enabled = on
+    tde.key_management = 'vault'
+    tde.vault_url = 'https://vault.thinkrank.com:8200'
+    tde.vault_token_file = '/vault/secrets/token'
+    
+    # Encryption settings
+    ssl = on
+    ssl_cert_file = '/etc/ssl/certs/server.crt'
+    ssl_key_file = '/etc/ssl/private/server.key'
+    ssl_ca_file = '/etc/ssl/certs/ca.crt'
+    ssl_ciphers = 'ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256'
+    ssl_prefer_server_ciphers = on
+    ssl_min_protocol_version = 'TLSv1.2'
+    
+    # Performance and security
+    log_statement = 'all'
+    log_connections = on
+    log_disconnections = on
+    log_checkpoints = on
+    
+    # Memory settings for encryption overhead
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    maintenance_work_mem = 64MB
+    
+  pg_hba.conf: |
+    # TYPE  DATABASE    USER    ADDRESS         METHOD
+    local   all         all                     md5
+    host    all         all     127.0.0.1/32    md5
+    host    all         all     ::1/128         md5
+    hostssl all         all     0.0.0.0/0       md5
+    
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-encrypted-pvc
+  namespace: thinkrank
+  annotations:
+    volume.beta.kubernetes.io/storage-class: "encrypted-ssd"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: encrypted-ssd
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-encrypted
+  namespace: thinkrank
+spec:
+  serviceName: postgres-encrypted
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-encrypted
+  template:
+    metadata:
+      labels:
+        app: postgres-encrypted
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "thinkrank-postgres"
+        vault.hashicorp.com/agent-inject-secret-token: "database/postgres/token"
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: thinkrank
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: DATABASE_PASSWORD
+        - name: POSTGRES_DB
+          value: thinkrank
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF8 --locale=C"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql
+        - name: ssl-certs
+          mountPath: /etc/ssl/certs
+          readOnly: true
+        - name: ssl-private
+          mountPath: /etc/ssl/private
+          readOnly: true
+        - name: vault-secrets
+          mountPath: /vault/secrets
+          readOnly: true
+        command:
+        - postgres
+        - -c
+        - config_file=/etc/postgresql/postgresql.conf
+        - -c
+        - hba_file=/etc/postgresql/pg_hba.conf
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - thinkrank
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - thinkrank
+            - -h
+            - localhost
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      - name: backup-sidecar
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: DATABASE_PASSWORD
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: DATABASE_PASSWORD
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache aws-cli gnupg
+          
+          # Import GPG key for backup encryption
+          echo "$BACKUP_GPG_PRIVATE_KEY" | gpg --import
+          
+          while true; do
+            echo "Starting encrypted backup..."
+            
+            # Create encrypted backup
+            pg_dump -h localhost -U thinkrank thinkrank | \
+            gpg --trust-model always --encrypt -r backup@thinkrank.com | \
+            aws s3 cp - s3://thinkrank-backups/postgres/backup-$(date +%Y%m%d-%H%M%S).sql.gpg
+            
+            echo "Backup completed, sleeping for 6 hours..."
+            sleep 21600
+          done
+        volumeMounts:
+        - name: backup-gpg-key
+          mountPath: /gpg
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-encrypted-pvc
+      - name: postgres-config
+        configMap:
+          name: postgres-tde-config
+      - name: ssl-certs
+        secret:
+          secretName: postgres-ssl-certs
+      - name: ssl-private
+        secret:
+          secretName: postgres-ssl-private
+      - name: vault-secrets
+        emptyDir: {}
+      - name: backup-gpg-key
+        secret:
+          secretName: backup-gpg-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-encrypted
+  namespace: thinkrank
+spec:
+  selector:
+    app: postgres-encrypted
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
+---
+# Field-level encryption functions
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-encryption-functions
+  namespace: thinkrank
+data:
+  encryption_functions.sql: |
+    -- Create encryption functions for PII data
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    
+    -- Function to encrypt sensitive data
+    CREATE OR REPLACE FUNCTION encrypt_pii(plaintext TEXT)
+    RETURNS TEXT AS $$
+    DECLARE
+        encryption_key TEXT;
+    BEGIN
+        -- Get encryption key from environment or vault
+        SELECT current_setting('app.encryption_key', true) INTO encryption_key;
+        
+        IF encryption_key IS NULL OR encryption_key = '' THEN
+            RAISE EXCEPTION 'Encryption key not configured';
+        END IF;
+        
+        RETURN encode(
+            pgp_sym_encrypt(plaintext, encryption_key, 'compress-algo=2'),
+            'base64'
+        );
+    END;
+    $$ LANGUAGE plpgsql SECURITY DEFINER;
+    
+    -- Function to decrypt sensitive data
+    CREATE OR REPLACE FUNCTION decrypt_pii(ciphertext TEXT)
+    RETURNS TEXT AS $$
+    DECLARE
+        encryption_key TEXT;
+    BEGIN
+        SELECT current_setting('app.encryption_key', true) INTO encryption_key;
+        
+        IF encryption_key IS NULL OR encryption_key = '' THEN
+            RAISE EXCEPTION 'Encryption key not configured';
+        END IF;
+        
+        RETURN pgp_sym_decrypt(
+            decode(ciphertext, 'base64'),
+            encryption_key
+        );
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN NULL; -- Return NULL for invalid ciphertext
+    END;
+    $$ LANGUAGE plpgsql SECURITY DEFINER;
+    
+    -- Update users table to use field-level encryption
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_encrypted TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_encrypted TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS address_encrypted TEXT;
+    
+    -- Create encrypted indexes
+    CREATE INDEX IF NOT EXISTS idx_users_email_encrypted ON users(email_encrypted);
+    
+    -- Trigger to automatically encrypt PII on insert/update
+    CREATE OR REPLACE FUNCTION encrypt_user_pii()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        IF NEW.email IS NOT NULL THEN
+            NEW.email_encrypted := encrypt_pii(NEW.email);
+            NEW.email := NULL; -- Clear plaintext
+        END IF;
+        
+        IF NEW.phone IS NOT NULL THEN
+            NEW.phone_encrypted := encrypt_pii(NEW.phone);
+            NEW.phone := NULL; -- Clear plaintext
+        END IF;
+        
+        IF NEW.address IS NOT NULL THEN
+            NEW.address_encrypted := encrypt_pii(NEW.address);
+            NEW.address := NULL; -- Clear plaintext
+        END IF;
+        
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+    
+    DROP TRIGGER IF EXISTS trigger_encrypt_user_pii ON users;
+    CREATE TRIGGER trigger_encrypt_user_pii
+        BEFORE INSERT OR UPDATE ON users
+        FOR EACH ROW EXECUTE FUNCTION encrypt_user_pii();
+    
+    -- View for decrypted data access (for authorized queries)
+    CREATE OR REPLACE VIEW users_decrypted AS
+    SELECT 
+        id,
+        username,
+        decrypt_pii(email_encrypted) as email,
+        decrypt_pii(phone_encrypted) as phone,
+        decrypt_pii(address_encrypted) as address,
+        created_at,
+        updated_at,
+        subscription_tier,
+        last_login_at
+    FROM users;
+    
+    -- Grant limited access to the decrypted view
+    GRANT SELECT ON users_decrypted TO thinkrank_app;
+    REVOKE ALL ON users FROM thinkrank_app;
+    GRANT SELECT, INSERT, UPDATE ON users TO thinkrank_app;

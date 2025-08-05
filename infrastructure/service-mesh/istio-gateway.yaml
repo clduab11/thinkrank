@@ -1,0 +1,150 @@
+# Istio Gateway Configuration for ThinkRank
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: thinkrank-gateway
+  namespace: thinkrank
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - api.thinkrank.com
+    - app.thinkrank.com
+    tls:
+      httpsRedirect: true
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: thinkrank-tls
+    hosts:
+    - api.thinkrank.com
+    - app.thinkrank.com
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: thinkrank-vs
+  namespace: thinkrank
+spec:
+  hosts:
+  - api.thinkrank.com
+  - app.thinkrank.com
+  gateways:
+  - thinkrank-gateway
+  http:
+  # API Routes
+  - match:
+    - uri:
+        prefix: /api/auth
+    - headers:
+        host:
+          exact: api.thinkrank.com
+    route:
+    - destination:
+        host: auth-service
+        port:
+          number: 3001
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  - match:
+    - uri:
+        prefix: /api/game
+    - headers:
+        host:
+          exact: api.thinkrank.com
+    route:
+    - destination:
+        host: game-service
+        port:
+          number: 3002
+    weight: 90
+    - destination:
+        host: game-service-canary
+        port:
+          number: 3002
+      weight: 10
+  - match:
+    - uri:
+        prefix: /api/ai
+    - headers:
+        host:
+          exact: api.thinkrank.com
+    route:
+    - destination:
+        host: ai-service
+        port:
+          number: 3003
+    timeout: 30s
+    retries:
+      attempts: 2
+      perTryTimeout: 15s
+  - match:
+    - uri:
+        prefix: /api/social
+    - headers:
+        host:
+          exact: api.thinkrank.com
+    route:
+    - destination:
+        host: social-service
+        port:
+          number: 3004
+  # Frontend Routes
+  - match:
+    - uri:
+        prefix: /
+    - headers:
+        host:
+          exact: app.thinkrank.com
+    route:
+    - destination:
+        host: frontend
+        port:
+          number: 80
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: thinkrank-authz
+  namespace: thinkrank
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/thinkrank/sa/auth-service"]
+    to:
+    - operation:
+        methods: ["GET", "POST"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/thinkrank/sa/api-gateway"]
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+  - when:
+    - key: source.ip
+      notValues: ["192.168.0.0/16"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: thinkrank
+spec:
+  mtls:
+    mode: STRICT

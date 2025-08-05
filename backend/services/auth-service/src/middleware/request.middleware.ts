@@ -44,7 +44,7 @@ export const requestMiddleware = (req: Request, res: Response, next: NextFunctio
 
   // Override res.end to log response
   const originalEnd = res.end;
-  res.end = function(chunk?: any, encoding?: any) {
+  res.end = function(chunk?: Buffer | string, encoding?: BufferEncoding) {
     const duration = Date.now() - req.startTime;
     res.setHeader('X-Response-Time', `${duration}ms`);
 

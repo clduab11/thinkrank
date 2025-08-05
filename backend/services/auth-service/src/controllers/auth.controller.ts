@@ -6,13 +6,18 @@ import {
   createSuccessResponse,
   DuplicateResourceError,
   getDatabase,
+  isRefreshTokenPayload,
+  JwtTokenPayload,
   LoginRequest,
   loginRequestSchema,
   NotFoundError,
+  RefreshTokenPayload,
   RegisterRequest,
   registerRequestSchema,
+  TokenPair,
   UpdateProfileRequest,
   updateProfileRequestSchema,
+  User,
   UserProfile,
   ValidationError,
   ValidationUtils
@@ -23,9 +28,19 @@ import jwt from 'jsonwebtoken';
 
 export class AuthController {
   private supabase = getDatabase().getServiceRoleClient();
-  private JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+  private JWT_SECRET = this.getRequiredEnvVar('JWT_SECRET');
+  private JWT_REFRESH_SECRET = this.getRequiredEnvVar('JWT_REFRESH_SECRET');
   private JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
   private REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
+
+  // Security enhancement: Require critical environment variables
+  private getRequiredEnvVar(name: string): string {
+    const value = process.env[name];
+    if (!value) {
+      throw new Error(`Critical environment variable ${name} is not set. Application will not start without proper security configuration.`);
+    }
+    return value;
+  }
 
   // User registration
   public async register(req: Request, res: Response): Promise<void> {
@@ -211,7 +226,11 @@ export class AuthController {
     }
 
     try {
-      const decoded = jwt.verify(refresh_token, this.JWT_SECRET) as any;
+      const decoded = jwt.verify(refresh_token, this.JWT_REFRESH_SECRET) as JwtTokenPayload;
+
+      if (!isRefreshTokenPayload(decoded)) {
+        throw new AuthenticationError('Invalid token payload structure');
+      }
 
       if (decoded.type !== 'refresh') {
         throw new AuthenticationError('Invalid token type');
@@ -313,7 +332,7 @@ export class AuthController {
       throw new ValidationError(error);
     }
 
-    const updateData: any = {};
+    const updateData: Partial<Pick<User, 'profile_data' | 'preferences'>> = {};
 
     if (value.profile_data) {
       updateData.profile_data = value.profile_data;
@@ -504,7 +523,7 @@ export class AuthController {
   }
 
   // Helper method to generate JWT tokens
-  private generateTokens(user: any, rememberMe: boolean = false): { accessToken: string; refreshToken: string } {
+  private generateTokens(user: Pick<User, 'id' | 'email' | 'username' | 'subscription_tier'>, rememberMe: boolean = false): TokenPair {
     const payload = {
       userId: user.id,
       email: user.email,
@@ -520,7 +539,7 @@ export class AuthController {
 
     const refreshToken = jwt.sign(
       { ...payload, type: 'refresh' },
-      this.JWT_SECRET,
+      this.JWT_REFRESH_SECRET,
       { expiresIn: rememberMe ? '30d' : this.REFRESH_TOKEN_EXPIRES_IN }
     );
 

@@ -1,0 +1,380 @@
+# Enhanced Grafana Configuration with Custom Dashboards
+apiVersion: integreatly.org/v1alpha1
+kind: Grafana
+metadata:
+  name: thinkrank-grafana
+  namespace: thinkrank
+spec:
+  ingress:
+    enabled: true
+    hostname: grafana.thinkrank.com
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    tls:
+      enabled: true
+      secretName: grafana-tls
+      
+  config:
+    server:
+      root_url: "https://grafana.thinkrank.com"
+      serve_from_sub_path: false
+    auth:
+      disable_login_form: false
+      disable_signout_menu: false
+    auth.anonymous:
+      enabled: false
+    auth.basic:
+      enabled: true
+    auth.oauth:
+      enabled: true
+      allow_sign_up: true
+      auto_login: false
+    security:
+      admin_user: admin
+      admin_password: ${GRAFANA_ADMIN_PASSWORD}
+      secret_key: ${GRAFANA_SECRET_KEY}
+      cookie_secure: true
+      cookie_samesite: strict
+    database:
+      type: postgres
+      host: postgres.thinkrank.svc.cluster.local:5432
+      name: grafana
+      user: grafana
+      password: ${GRAFANA_DB_PASSWORD}
+      ssl_mode: require
+    session:
+      provider: postgres
+      provider_config: "user=grafana password=${GRAFANA_DB_PASSWORD} host=postgres.thinkrank.svc.cluster.local port=5432 dbname=grafana sslmode=require"
+    smtp:
+      enabled: true
+      host: ${SMTP_HOST}
+      user: ${SMTP_USER}
+      password: ${SMTP_PASSWORD}
+      from_address: alerts@thinkrank.com
+      from_name: "ThinkRank Monitoring"
+    alerting:
+      enabled: true
+      execute_alerts: true
+      error_or_timeout: alerting
+      nodata_or_nullvalues: no_data
+      concurrent_render_limit: 5
+    unified_alerting:
+      enabled: true
+      ha_peers: thinkrank-grafana-0.thinkrank-grafana:9094,thinkrank-grafana-1.thinkrank-grafana:9094
+      ha_listen_address: "0.0.0.0:9094"
+      ha_advertise_address: "${POD_IP}:9094"
+    feature_toggles:
+      enable: ngalert,live,canvas,expressions
+    panels:
+      disable_sanitize_html: false
+    plugins:
+      enable_alpha: false
+      allow_loading_unsigned_plugins: ""
+
+  deployment:
+    replicas: 2
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 200m
+      limits:
+        memory: 2Gi
+        cpu: 1
+    env:
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    - name: GRAFANA_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: grafana-secrets
+          key: admin-password
+    - name: GRAFANA_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: grafana-secrets
+          key: secret-key
+    - name: GRAFANA_DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: grafana-secrets
+          key: db-password
+    - name: SMTP_HOST
+      valueFrom:
+        secretKeyRef:
+          name: grafana-secrets
+          key: smtp-host
+    - name: SMTP_USER
+      valueFrom:
+        secretKeyRef:
+          name: grafana-secrets
+          key: smtp-user
+    - name: SMTP_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: grafana-secrets
+          key: smtp-password
+
+  persistence:
+    enabled: true
+    storageClassName: gp2-encrypted
+    size: 10Gi
+
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/thinkrank-grafana-role
+
+---
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDataSource
+metadata:
+  name: prometheus-datasource
+  namespace: thinkrank
+spec:
+  grafana:
+    name: thinkrank-grafana
+    namespace: thinkrank
+  datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus-server.thinkrank.svc.cluster.local:80
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      queryTimeout: 60s
+      timeInterval: 30s
+    secureJsonData:
+      httpHeaderValue1: "Bearer ${PROMETHEUS_TOKEN}"
+    version: 1
+    editable: true
+
+---
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDataSource
+metadata:
+  name: jaeger-datasource
+  namespace: thinkrank
+spec:
+  grafana:
+    name: thinkrank-grafana
+    namespace: thinkrank
+  datasources:
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger-production-query.observability.svc.cluster.local:16686
+    jsonData:
+      tracesToLogs:
+        datasourceUid: loki
+        tags: ["job", "instance", "pod", "namespace"]
+        mappedTags: [{"key": "service.name", "value": "service"}]
+        mapTagNamesEnabled: true
+        spanStartTimeShift: 1h
+        spanEndTimeShift: 1h
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags: [{"key": "service.name", "value": "service"}, {"key": "job"}]
+        queries:
+        - name: "Sample query"
+          query: "sum(rate(traces_spanmetrics_latency_bucket[5m]))"
+      nodeGraph:
+        enabled: true
+    version: 1
+    editable: true
+
+---
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDataSource
+metadata:
+  name: elasticsearch-datasource
+  namespace: thinkrank
+spec:
+  grafana:
+    name: thinkrank-grafana
+    namespace: thinkrank
+  datasources:
+  - name: Elasticsearch
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch.logging.svc.cluster.local:9200
+    database: "thinkrank-logs-*"
+    jsonData:
+      interval: Daily
+      timeField: "@timestamp"
+      esVersion: "7.10.0"
+      maxConcurrentShardRequests: 5
+      logMessageField: message
+      logLevelField: level
+    secureJsonData:
+      basicAuthPassword: ${ELASTICSEARCH_PASSWORD}
+    basicAuth: true
+    basicAuthUser: elastic
+    version: 1
+    editable: true
+
+---
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDashboard
+metadata:
+  name: thinkrank-application-dashboard
+  namespace: thinkrank
+spec:
+  grafana:
+    name: thinkrank-grafana
+    namespace: thinkrank
+  json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "ThinkRank Application Dashboard",
+        "tags": ["thinkrank", "application"],
+        "timezone": "browser",
+        "refresh": "30s",
+        "schemaVersion": 16,
+        "version": 1,
+        "panels": [
+          {
+            "id": 1,
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{namespace=\"thinkrank\"}[5m])) by (service)",
+                "legendFormat": "{{service}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Requests/sec",
+                "min": 0
+              }
+            ],
+            "xAxes": [
+              {
+                "mode": "time"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "Response Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"thinkrank\"}[5m])) by (service, le))",
+                "legendFormat": "{{service}} 95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{namespace=\"thinkrank\"}[5m])) by (service, le))",
+                "legendFormat": "{{service}} 50th percentile"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Response Time (s)",
+                "min": 0
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{namespace=\"thinkrank\",status=~\"5..\"}[5m])) by (service) / sum(rate(http_requests_total{namespace=\"thinkrank\"}[5m])) by (service)",
+                "legendFormat": "{{service}} Error Rate"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Error Rate (%)",
+                "min": 0,
+                "max": 1
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "id": 4,
+            "title": "Active Users",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "thinkrank_active_users_total",
+                "legendFormat": "Active Users"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 8
+            }
+          },
+          {
+            "id": 5,
+            "title": "Game Sessions",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "thinkrank_game_sessions_active",
+                "legendFormat": "Active Sessions"
+              },
+              {
+                "expr": "rate(thinkrank_game_sessions_started_total[5m])",
+                "legendFormat": "New Sessions/sec"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 16
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "timepicker": {
+          "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+        }
+      }
+    }
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secrets
+  namespace: thinkrank
+type: Opaque
+stringData:
+  admin-password: "CHANGE_ME_IN_PRODUCTION"
+  secret-key: "CHANGE_ME_IN_PRODUCTION"
+  db-password: "CHANGE_ME_IN_PRODUCTION"
+  smtp-host: "smtp.example.com"
+  smtp-user: "alerts@thinkrank.com"
+  smtp-password: "CHANGE_ME_IN_PRODUCTION"

@@ -1,0 +1,251 @@
+# OpenTelemetry Collector Configuration for Distributed Tracing
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: thinkrank-otel-collector
+  namespace: thinkrank
+spec:
+  image: otel/opentelemetry-collector-contrib:0.91.0
+  mode: deployment
+  replicas: 3
+  
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 200m
+    limits:
+      memory: 1Gi
+      cpu: 1
+
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      prometheus:
+        config:
+          scrape_configs:
+          - job_name: 'kubernetes-pods'
+            kubernetes_sd_configs:
+            - role: pod
+              namespaces:
+                names:
+                - thinkrank
+            relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: keep
+              regex: true
+      jaeger:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:14250
+          thrift_http:
+            endpoint: 0.0.0.0:14268
+          thrift_compact:
+            endpoint: 0.0.0.0:6831
+      zipkin:
+        endpoint: 0.0.0.0:9411
+      
+    processors:
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+      memory_limiter:
+        limit_mib: 512
+        spike_limit_mib: 128
+        check_interval: 5s
+      resource:
+        attributes:
+        - key: environment
+          value: ${ENV}
+          action: upsert
+        - key: service.namespace
+          value: thinkrank
+          action: upsert
+      transform:
+        trace_statements:
+        - context: span
+          statements:
+          - set(attributes["thinkrank.version"], "1.0.0")
+          - set(attributes["thinkrank.deployment"], "${DEPLOYMENT}")
+      probabilistic_sampler:
+        sampling_percentage: 10
+      tail_sampling:
+        decision_wait: 10s
+        num_traces: 100
+        expected_new_traces_per_sec: 10
+        policies:
+        - name: errors
+          type: status_code
+          status_code: {status_codes: [ERROR]}
+        - name: slow
+          type: latency
+          latency: {threshold_ms: 1000}
+        - name: random
+          type: probabilistic
+          probabilistic: {sampling_percentage: 1}
+
+    exporters:
+      jaeger:
+        endpoint: jaeger-collector.observability.svc.cluster.local:14250
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        namespace: thinkrank
+        const_labels:
+          service: otel-collector
+      otlp:
+        endpoint: https://api.honeycomb.io
+        headers:
+          "x-honeycomb-team": "${HONEYCOMB_API_KEY}"
+          "x-honeycomb-dataset": "thinkrank"
+      aws_xray:
+        endpoint: https://xray.${AWS_REGION}.amazonaws.com
+        no_verify_ssl: false
+        local_mode: false
+        region: ${AWS_REGION}
+      datadog:
+        api:
+          key: ${DATADOG_API_KEY}
+          site: datadoghq.com
+        hostname: thinkrank-otel-collector
+        env: ${ENV}
+        service: thinkrank
+        version: "1.0.0"
+      elasticsearch:
+        endpoints: ["http://elasticsearch.logging.svc.cluster.local:9200"]
+        logs_index: thinkrank-logs
+        traces_index: thinkrank-traces
+        metrics_index: thinkrank-metrics
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      pprof:
+        endpoint: 0.0.0.0:1777
+      zpages:
+        endpoint: 0.0.0.0:55679
+      memory_ballast:
+        size_mib: 64
+
+    service:
+      telemetry:
+        logs:
+          level: info
+        metrics:
+          address: 0.0.0.0:8888
+      extensions: [health_check, pprof, zpages, memory_ballast]
+      pipelines:
+        traces:
+          receivers: [otlp, jaeger, zipkin]
+          processors: [memory_limiter, resource, transform, batch, tail_sampling]
+          exporters: [jaeger, otlp, aws_xray, datadog]
+        metrics:
+          receivers: [otlp, prometheus]
+          processors: [memory_limiter, resource, batch]
+          exporters: [prometheus, datadog, aws_xray]
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [elasticsearch, datadog]
+
+  env:
+  - name: ENV
+    value: production
+  - name: DEPLOYMENT
+    value: blue-green
+  - name: AWS_REGION
+    value: us-west-2
+  - name: HONEYCOMB_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: observability-secrets
+        key: honeycomb-api-key
+  - name: DATADOG_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: observability-secrets
+        key: datadog-api-key
+
+  serviceAccount: otel-collector
+
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+    protocol: TCP
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
+    protocol: TCP
+  - name: jaeger-grpc
+    port: 14250
+    targetPort: 14250
+    protocol: TCP
+  - name: jaeger-thrift-http
+    port: 14268
+    targetPort: 14268
+    protocol: TCP
+  - name: jaeger-thrift-compact
+    port: 6831
+    targetPort: 6831
+    protocol: UDP
+  - name: zipkin
+    port: 9411
+    targetPort: 9411
+    protocol: TCP
+  - name: prometheus
+    port: 8889
+    targetPort: 8889
+    protocol: TCP
+  - name: health
+    port: 13133
+    targetPort: 13133
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+  namespace: thinkrank
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/thinkrank-otel-collector-role
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "services", "endpoints", "nodes/proxy"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get"]
+- apiGroups: ["extensions"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector
+subjects:
+- kind: ServiceAccount
+  name: otel-collector
+  namespace: thinkrank

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as cron from 'node-cron';
+import { totalmem, freemem } from 'os';
 import { logger } from './logger.service';
 
 const supabaseUrl = process.env['SUPABASE_URL']!;
@@ -336,8 +337,8 @@ export class AlertingService {
       if (!rule || !rule.enabled) return;
 
       const memUsage = process.memoryUsage();
-      const totalMem = require('os').totalmem();
-      const usedMem = totalMem - require('os').freemem();
+      const totalMem = totalmem();
+      const usedMem = totalMem - freemem();
       const memoryPercent = (usedMem / totalMem) * 100;
 
       if (memoryPercent > rule.threshold) {
@@ -421,10 +422,10 @@ export class AlertingService {
       });
 
       // Console notification for development
-      console.log(`🚨 ALERT [${alert.severity.toUpperCase()}]: ${alert.title}`);
-      console.log(`   ${alert.message}`);
+      logger.warn(`🚨 ALERT [${alert.severity.toUpperCase()}]: ${alert.title}`);
+      logger.warn(`   ${alert.message}`);
       if (alert.threshold && alert.currentValue) {
-        console.log(`   Current: ${alert.currentValue}, Threshold: ${alert.threshold}`);
+        logger.warn(`   Current: ${alert.currentValue}, Threshold: ${alert.threshold}`);
       }
     } catch (error) {
       logger.error('Failed to send alert notifications', { error });

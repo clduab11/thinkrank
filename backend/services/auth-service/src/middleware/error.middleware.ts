@@ -1,5 +1,15 @@
 // Error handling middleware for authentication service
-import { AppError, ErrorFormatter, ErrorHandler, isAppError } from '@thinkrank/shared';
+import {
+  AppError,
+  DatabaseError,
+  ErrorFormatter,
+  ErrorHandler,
+  isAppError,
+  isDatabaseError,
+  isJoiValidationError,
+  JoiValidationError,
+  JsonSyntaxError
+} from '@thinkrank/shared';
 import { NextFunction, Request, Response } from 'express';
 
 // Global error handling middleware
@@ -32,7 +42,7 @@ export const errorMiddleware = (
       400,
       'VALIDATION_ERROR',
       true,
-      { details: (error as any).details }
+      { details: (error as JoiValidationError).details }
     );
 
     const errorResponse = ErrorFormatter.format(validationError, req.requestId);
@@ -65,7 +75,7 @@ export const errorMiddleware = (
   }
 
   // Handle Supabase errors
-  if ((error as any).code) {
+  if (isDatabaseError(error)) {
     const supabaseError = ErrorHandler.fromSupabaseError(error);
     const statusCode = ErrorHandler.getStatusCode(supabaseError);
     const errorResponse = ErrorFormatter.format(supabaseError, req.requestId);
@@ -75,6 +85,7 @@ export const errorMiddleware = (
 
   // Handle syntax errors (malformed JSON)
   if (error instanceof SyntaxError && 'body' in error) {
+    const syntaxError = error as JsonSyntaxError;
     const syntaxError = new AppError(
       'Invalid JSON format',
       400,
@@ -123,16 +134,18 @@ export const notFoundMiddleware = (req: Request, res: Response): void => {
 };
 
 // Async error handler wrapper
-export const asyncHandler = (fn: Function) => {
+export const asyncHandler = (
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<void> | void
+) => {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 };
 
 // Validation error handler
-export const handleValidationError = (error: any, req: Request): AppError => {
-  if (error.isJoi) {
-    const details = error.details.map((detail: any) => ({
+export const handleValidationError = (error: unknown, req: Request): AppError => {
+  if (isJoiValidationError(error)) {
+    const details = error.details.map((detail) => ({
       field: detail.path.join('.'),
       message: detail.message,
       code: detail.type
@@ -151,7 +164,7 @@ export const handleValidationError = (error: any, req: Request): AppError => {
 };
 
 // Database error handler
-export const handleDatabaseError = (error: any, req: Request): AppError => {
+export const handleDatabaseError = (error: DatabaseError, req: Request): AppError => {
   req.logger.error('Database error occurred', {
     code: error.code,
     message: error.message,

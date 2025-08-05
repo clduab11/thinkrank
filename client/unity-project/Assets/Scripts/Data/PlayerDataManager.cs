@@ -78,7 +78,7 @@ namespace ThinkRank.Data
         #region Data Loading
 
         /// <summary>
-        /// Load player data from local storage
+        /// Load player data from secure storage
         /// </summary>
         public async System.Threading.Tasks.Task LoadPlayerData()
         {
@@ -86,13 +86,13 @@ namespace ThinkRank.Data
             {
                 Debug.Log("[PlayerDataManager] Loading player data...");
 
-                // Try to load from PlayerPrefs first
-                string dataJson = PlayerPrefs.GetString(PLAYER_DATA_KEY, "");
+                // Use secure storage instead of PlayerPrefs
+                string dataJson = ThinkRank.Security.SecureStorage.GetSecureString(PLAYER_DATA_KEY, "");
 
                 if (!string.IsNullOrEmpty(dataJson))
                 {
                     currentPlayerData = JsonConvert.DeserializeObject<PlayerData>(dataJson);
-                    Debug.Log("[PlayerDataManager] Player data loaded from local storage");
+                    Debug.Log("[PlayerDataManager] Player data loaded from secure storage");
                 }
                 else
                 {
@@ -134,12 +134,12 @@ namespace ThinkRank.Data
         {
             try
             {
-                string backupJson = PlayerPrefs.GetString(BACKUP_DATA_KEY, "");
+                string backupJson = ThinkRank.Security.SecureStorage.GetSecureString(BACKUP_DATA_KEY, "");
 
                 if (!string.IsNullOrEmpty(backupJson))
                 {
                     currentPlayerData = JsonConvert.DeserializeObject<PlayerData>(backupJson);
-                    Debug.Log("[PlayerDataManager] Loaded backup player data");
+                    Debug.Log("[PlayerDataManager] Loaded backup player data from secure storage");
 
                     // Save the backup as current data
                     SavePlayerData();
@@ -218,11 +218,11 @@ namespace ThinkRank.Data
         }
 
         /// <summary>
-        /// Load player preferences
+        /// Load player preferences from secure storage
         /// </summary>
         private void LoadPlayerPreferences()
         {
-            string prefsJson = PlayerPrefs.GetString(PLAYER_PREFS_KEY, "");
+            string prefsJson = ThinkRank.Security.SecureStorage.GetSecureString(PLAYER_PREFS_KEY, "");
 
             if (!string.IsNullOrEmpty(prefsJson))
             {
@@ -230,7 +230,7 @@ namespace ThinkRank.Data
                 {
                     var loadedPrefs = JsonConvert.DeserializeObject<PlayerPreferences>(prefsJson);
                     currentPlayerData.preferences = loadedPrefs;
-                    Debug.Log("[PlayerDataManager] Player preferences loaded");
+                    Debug.Log("[PlayerDataManager] Player preferences loaded from secure storage");
                 }
                 catch (Exception e)
                 {
@@ -260,21 +260,18 @@ namespace ThinkRank.Data
                 currentPlayerData.lastPlayedAt = DateTime.UtcNow;
 
                 // Create backup of previous data
-                string currentDataJson = PlayerPrefs.GetString(PLAYER_DATA_KEY, "");
+                string currentDataJson = ThinkRank.Security.SecureStorage.GetSecureString(PLAYER_DATA_KEY, "");
                 if (!string.IsNullOrEmpty(currentDataJson))
                 {
-                    PlayerPrefs.SetString(BACKUP_DATA_KEY, currentDataJson);
+                    ThinkRank.Security.SecureStorage.SetSecureString(BACKUP_DATA_KEY, currentDataJson);
                 }
 
-                // Save current data
+                // Save current data securely
                 string dataJson = JsonConvert.SerializeObject(currentPlayerData, Formatting.Indented);
-                PlayerPrefs.SetString(PLAYER_DATA_KEY, dataJson);
+                ThinkRank.Security.SecureStorage.SetSecureString(PLAYER_DATA_KEY, dataJson);
 
                 // Save preferences separately
                 SavePlayerPreferences();
-
-                // Force save to disk
-                PlayerPrefs.Save();
 
                 hasUnsavedChanges = false;
                 lastSaveTime = Time.unscaledTime;
@@ -296,15 +293,15 @@ namespace ThinkRank.Data
         }
 
         /// <summary>
-        /// Save player preferences separately
+        /// Save player preferences securely
         /// </summary>
         private void SavePlayerPreferences()
         {
             try
             {
                 string prefsJson = JsonConvert.SerializeObject(currentPlayerData.preferences, Formatting.Indented);
-                PlayerPrefs.SetString(PLAYER_PREFS_KEY, prefsJson);
-                Debug.Log("[PlayerDataManager] Player preferences saved");
+                ThinkRank.Security.SecureStorage.SetSecureString(PLAYER_PREFS_KEY, prefsJson);
+                Debug.Log("[PlayerDataManager] Player preferences saved to secure storage");
             }
             catch (Exception e)
             {

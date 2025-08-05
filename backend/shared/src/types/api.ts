@@ -5,13 +5,13 @@ import {
 } from './database';
 
 // Standard API Response wrapper
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: {
     code: string;
     message: string;
-    details?: any;
+    details?: Record<string, unknown>;
   };
   meta?: {
     timestamp: string;
@@ -83,20 +83,20 @@ export interface UserStatsResponse {
 export interface StartGameSessionRequest {
   platform: string;
   app_version: string;
-  device_info: Record<string, any>;
+  device_info: Record<string, unknown>;
 }
 
 export interface UpdateGameSessionRequest {
   problems_attempted?: number;
   problems_completed?: number;
   total_score?: number;
-  session_data?: Record<string, any>;
+  session_data?: Record<string, unknown>;
 }
 
 export interface EndGameSessionRequest {
   final_score: number;
   problems_completed: number;
-  session_data: Record<string, any>;
+  session_data: Record<string, unknown>;
 }
 
 export interface GameProgressUpdateRequest {
@@ -125,7 +125,7 @@ export interface LeaderboardResponse {
 // AI Research types
 export interface SubmitSolutionRequest {
   problem_id: string;
-  solution_data: Record<string, any>;
+  solution_data: Record<string, unknown>;
   confidence_score: number;
   time_spent_seconds: number;
 }
@@ -177,7 +177,7 @@ export interface SocialFeedEntry {
   id: string;
   user: UserProfile;
   action_type: 'achievement' | 'contribution' | 'level_up' | 'streak';
-  content: Record<string, any>;
+  content: Record<string, unknown>;
   likes_count: number;
   comments_count: number;
   created_at: string;
@@ -195,7 +195,7 @@ export interface SocialStats {
 export interface TrackEventRequest {
   event_type: string;
   event_name: string;
-  event_data: Record<string, any>;
+  event_data: Record<string, unknown>;
   session_id?: string;
 }
 
@@ -283,7 +283,7 @@ export interface ApiError {
 export interface WebhookEvent {
   id: string;
   type: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   created_at: string;
   signature: string;
 }
@@ -316,7 +316,7 @@ export interface HealthCheckResponse {
 }
 
 // Export utility types
-export type ApiRequest<T = any> = T;
-export type ApiHandler<TRequest = any, TResponse = any> = (
+export type ApiRequest<T = unknown> = T;
+export type ApiHandler<TRequest = unknown, TResponse = unknown> = (
   req: TRequest
 ) => Promise<ApiResponse<TResponse>>;

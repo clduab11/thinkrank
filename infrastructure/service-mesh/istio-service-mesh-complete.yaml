@@ -1,0 +1,751 @@
+# Complete Istio Service Mesh Configuration for ThinkRank Phase 4
+# This configuration provides comprehensive traffic management, security, and observability
+
+# Istio Control Plane Configuration
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: thinkrank-control-plane
+  namespace: istio-system
+spec:
+  values:
+    global:
+      meshID: thinkrank-mesh
+      meshConfig:
+        defaultConfig:
+          proxyStatsMatcher:
+            inclusionRegexps:
+            - ".*circuit_breakers.*"
+            - ".*upstream_rq_retry.*"
+            - ".*upstream_rq_pending.*"
+            - ".*_cx_.*"
+          concurrency: 2
+          holdApplicationUntilProxyStarts: true
+        extensionProviders:
+        - name: jaeger
+          zipkin:
+            service: jaeger-collector.observability.svc.cluster.local
+            port: 9411
+        - name: prometheus
+          prometheus:
+            configOverride:
+              metric_relabeling_configs:
+              - source_labels: [__name__]
+                regex: 'istio_.*'
+                target_label: __tmp_istio_metric
+              - source_labels: [__tmp_istio_metric]
+                regex: '.*'
+                target_label: __name__
+                replacement: 'thinkrank_${1}'
+        - name: otel
+          envoyOtelAls:
+            service: thinkrank-otel-collector.thinkrank.svc.cluster.local
+            port: 4317
+  components:
+    pilot:
+      k8s:
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1
+            memory: 2Gi
+        hpaSpec:
+          maxReplicas: 5
+          minReplicas: 2
+          metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 80
+    ingressGateways:
+    - name: istio-ingressgateway
+      enabled: true
+      k8s:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 2
+            memory: 1Gi
+        hpaSpec:
+          maxReplicas: 10
+          minReplicas: 3
+          metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 80
+        service:
+          type: LoadBalancer
+          annotations:
+            service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+            service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+            service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+            service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:us-west-2:ACCOUNT_ID:certificate/CERT_ID"
+            service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "https"
+    egressGateways:
+    - name: istio-egressgateway
+      enabled: true
+      k8s:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+
+---
+# Telemetry Configuration for Enhanced Observability
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: thinkrank-telemetry
+  namespace: thinkrank
+spec:
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        thinkrank_service_version:
+          value: "%{THINKRANK_VERSION}"
+        thinkrank_deployment:
+          value: "%{THINKRANK_DEPLOYMENT}"
+        thinkrank_environment:
+          value: "%{THINKRANK_ENV}"
+  tracing:
+  - providers:
+    - name: jaeger
+  - providers:
+    - name: otel
+  accessLogging:
+  - providers:
+    - name: otel
+  - match:
+      mode: CLIENT
+    format: |
+      {
+        "timestamp": "%START_TIME%",
+        "method": "%REQ(:METHOD)%",
+        "url": "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%",
+        "protocol": "%PROTOCOL%",
+        "response_code": "%RESPONSE_CODE%",
+        "response_flags": "%RESPONSE_FLAGS%",
+        "bytes_received": "%BYTES_RECEIVED%",
+        "bytes_sent": "%BYTES_SENT%",
+        "duration": "%DURATION%",
+        "upstream_service_time": "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%",
+        "x_forwarded_for": "%REQ(X-FORWARDED-FOR)%",
+        "user_agent": "%REQ(USER-AGENT)%",
+        "request_id": "%REQ(X-REQUEST-ID)%",
+        "authority": "%REQ(:AUTHORITY)%",
+        "upstream_host": "%UPSTREAM_HOST%",
+        "upstream_cluster": "%UPSTREAM_CLUSTER%",
+        "upstream_local_address": "%UPSTREAM_LOCAL_ADDRESS%",
+        "downstream_local_address": "%DOWNSTREAM_LOCAL_ADDRESS%",
+        "downstream_remote_address": "%DOWNSTREAM_REMOTE_ADDRESS%",
+        "requested_server_name": "%REQUESTED_SERVER_NAME%",
+        "thinkrank_trace_id": "%REQ(X-TRACE-ID)%"
+      }
+
+---
+# Service Mesh Security Configuration
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: thinkrank-mesh-policy
+  namespace: thinkrank
+spec:
+  mtls:
+    mode: STRICT
+
+---
+# Enhanced Authorization Policy with RBAC
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: thinkrank-rbac-policy
+  namespace: thinkrank
+spec:
+  selector:
+    matchLabels:
+      version: v1
+  action: ALLOW
+  rules:
+  # Internal service-to-service communication
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/thinkrank/sa/auth-service"
+        - "cluster.local/ns/thinkrank/sa/api-gateway"
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/api/*"]
+    when:
+    - key: source.certificate_fingerprint
+      values: ["*"]
+      
+  # Frontend access rules
+  - from:
+    - source:
+        principals: ["cluster.local/ns/thinkrank/sa/frontend"]
+    to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/api/auth/*", "/api/game/*", "/api/social/*"]
+        
+  # AI service special access (higher latency tolerance)
+  - from:
+    - source:
+        principals: ["cluster.local/ns/thinkrank/sa/game-service"]
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/api/ai/*"]
+    when:
+    - key: request.headers[x-ai-priority]
+      values: ["high", "medium"]
+      
+  # Analytics service access
+  - from:
+    - source:
+        principals: ["cluster.local/ns/thinkrank/sa/analytics-service"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/api/*/metrics", "/api/*/events"]
+    when:
+    - key: request.time
+      values: ["*"]
+
+---
+# Traffic Management - Destination Rules with Circuit Breakers
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: auth-service-dr
+  namespace: thinkrank
+spec:
+  host: auth-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 10s
+        tcpKeepalive:
+          time: 7200s
+          interval: 75s
+      http:
+        http1MaxPendingRequests: 64
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+        consecutiveGatewayFailure: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+        minHealthPercent: 30
+    circuitBreaker:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+    loadBalancer:
+      simple: LEAST_CONN
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+  portLevelSettings:
+  - port:
+      number: 3001
+    connectionPool:
+      tcp:
+        maxConnections: 50
+      http:
+        http1MaxPendingRequests: 32
+        maxRequestsPerConnection: 5
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: game-service-dr
+  namespace: thinkrank
+spec:
+  host: game-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 5s
+      http:
+        http1MaxPendingRequests: 128
+        http2MaxRequests: 200
+        maxRequestsPerConnection: 20
+        maxRetries: 2
+        h2UpgradePolicy: UPGRADE
+    circuitBreaker:
+      consecutiveErrors: 3
+      interval: 10s
+      baseEjectionTime: 10s
+      maxEjectionPercent: 30
+      minHealthPercent: 70
+    loadBalancer:
+      simple: ROUND_ROBIN
+      localityLbSetting:
+        enabled: true
+        distribute:
+        - from: "region1/zone1/*"
+          to:
+            "region1/zone1/*": 80
+            "region1/zone2/*": 20
+        failover:
+        - from: region1
+          to: region2
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: canary
+    labels:
+      version: canary
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 50
+        http:
+          maxRequestsPerConnection: 5
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ai-service-dr
+  namespace: thinkrank
+spec:
+  host: ai-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 50
+        connectTimeout: 30s
+      http:
+        http1MaxPendingRequests: 32
+        http2MaxRequests: 50
+        maxRequestsPerConnection: 3
+        maxRetries: 1
+        timeout: 30s
+    circuitBreaker:
+      consecutiveErrors: 2
+      interval: 60s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 25
+      minHealthPercent: 75
+    loadBalancer:
+      simple: LEAST_CONN
+    retryPolicy:
+      attempts: 2
+      perTryTimeout: 15s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+
+---
+# Advanced Virtual Service with Canary Deployments
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: thinkrank-advanced-routing
+  namespace: thinkrank
+spec:
+  hosts:
+  - api.thinkrank.com
+  - app.thinkrank.com
+  gateways:
+  - thinkrank-gateway
+  http:
+  # Auth service with retry and fault injection
+  - match:
+    - uri:
+        prefix: /api/auth
+    - headers:
+        host:
+          exact: api.thinkrank.com
+    route:
+    - destination:
+        host: auth-service
+        port:
+          number: 3001
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+    timeout: 30s
+    headers:
+      request:
+        add:
+          x-thinkrank-service: "auth"
+          x-request-start: "%START_TIME%"
+      response:
+        add:
+          x-thinkrank-processed-by: "istio-gateway"
+          
+  # Game service with canary deployment (90/10 split)
+  - match:
+    - uri:
+        prefix: /api/game
+    - headers:
+        host:
+          exact: api.thinkrank.com
+    route:
+    - destination:
+        host: game-service
+        subset: v1
+        port:
+          number: 3002
+      weight: 90
+      headers:
+        request:
+          add:
+            x-canary-version: "stable"
+    - destination:
+        host: game-service
+        subset: canary
+        port:
+          number: 3002
+      weight: 10
+      headers:
+        request:
+          add:
+            x-canary-version: "canary"
+    retries:
+      attempts: 2
+      perTryTimeout: 5s
+    timeout: 15s
+    
+  # AI service with intelligent routing based on request priority
+  - match:
+    - uri:
+        prefix: /api/ai
+    - headers:
+        host:
+          exact: api.thinkrank.com
+        x-ai-priority:
+          exact: "high"
+    route:
+    - destination:
+        host: ai-service
+        port:
+          number: 3003
+    timeout: 60s
+    retries:
+      attempts: 1
+      perTryTimeout: 30s
+    headers:
+      request:
+        add:
+          x-priority-routing: "high"
+          
+  - match:
+    - uri:
+        prefix: /api/ai
+    - headers:
+        host:
+          exact: api.thinkrank.com
+    route:
+    - destination:
+        host: ai-service
+        port:
+          number: 3003
+    timeout: 30s
+    retries:
+      attempts: 2
+      perTryTimeout: 15s
+    headers:
+      request:
+        add:
+          x-priority-routing: "standard"
+          
+  # Social service with geographic routing
+  - match:
+    - uri:
+        prefix: /api/social
+    - headers:
+        host:
+          exact: api.thinkrank.com
+        x-user-region:
+          regex: "us-.*"
+    route:
+    - destination:
+        host: social-service
+        port:
+          number: 3004
+    headers:
+      request:
+        add:
+          x-region-routing: "us"
+          
+  - match:
+    - uri:
+        prefix: /api/social
+    - headers:
+        host:
+          exact: api.thinkrank.com
+    route:
+    - destination:
+        host: social-service
+        port:
+          number: 3004
+    headers:
+      request:
+        add:
+          x-region-routing: "global"
+          
+  # Frontend with CDN-like caching headers
+  - match:
+    - uri:
+        prefix: /
+    - headers:
+        host:
+          exact: app.thinkrank.com
+    route:
+    - destination:
+        host: frontend
+        port:
+          number: 80
+    headers:
+      response:
+        add:
+          cache-control: "public, max-age=3600"
+          x-served-by: "istio-frontend"
+
+---
+# Service Entry for External Dependencies
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-ai-apis
+  namespace: thinkrank
+spec:
+  hosts:
+  - api.openai.com
+  - api.anthropic.com
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-monitoring
+  namespace: thinkrank
+spec:
+  hosts:
+  - api.honeycomb.io
+  - api.datadoghq.com
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+
+---
+# Egress Gateway for Controlled External Access
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: thinkrank-egress-gateway
+  namespace: thinkrank
+spec:
+  selector:
+    istio: egressgateway
+  servers:
+  - port:
+      number: 443
+      name: tls
+      protocol: TLS
+    hosts:
+    - api.openai.com
+    - api.anthropic.com
+    - api.honeycomb.io
+    - api.datadoghq.com
+    tls:
+      mode: PASSTHROUGH
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: external-ai-routing
+  namespace: thinkrank
+spec:
+  hosts:
+  - api.openai.com
+  - api.anthropic.com
+  gateways:
+  - thinkrank-egress-gateway
+  - mesh
+  tls:
+  - match:
+    - port: 443
+      sniHosts:
+      - api.openai.com
+      - api.anthropic.com
+    route:
+    - destination:
+        host: istio-egressgateway.istio-system.svc.cluster.local
+        port:
+          number: 443
+      weight: 100
+
+---
+# Network Policy for Additional Security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thinkrank-mesh-network-policy
+  namespace: thinkrank
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: thinkrank
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    - namespaceSelector:
+        matchLabels:
+          name: thinkrank
+    - podSelector:
+        matchLabels:
+          app: istio-proxy
+    ports:
+    - protocol: TCP
+      port: 15090  # Envoy admin port
+    - protocol: TCP
+      port: 15000  # Envoy admin port
+    - protocol: TCP
+      port: 15001  # Envoy port
+    - protocol: TCP
+      port: 15006  # Envoy inbound port
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    - namespaceSelector:
+        matchLabels:
+          name: thinkrank
+    - namespaceSelector:
+        matchLabels:
+          name: observability
+    - namespaceSelector:
+        matchLabels:
+          name: logging
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443  # HTTPS external
+    - protocol: TCP
+      port: 53   # DNS
+    - protocol: UDP
+      port: 53   # DNS
+
+---
+# Envoy Filter for Advanced Customization
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: thinkrank-performance-optimization
+  namespace: thinkrank
+spec:
+  configPatches:
+  # Enable response compression
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.compressor
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.compressor.v3.Compressor
+          response_direction_config:
+            common_config:
+              min_content_length: 1024
+              content_type:
+              - "application/json"
+              - "text/html"
+              - "text/plain"
+              - "text/css"
+              - "application/javascript"
+          compressor_library:
+            name: envoy.compression.gzip.compressor
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.compression.gzip.compressor.v3.Gzip
+              compression_level: 6
+              
+  # Custom access logging
+  - applyTo: NETWORK_FILTER
+    match:
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: MERGE
+      value:
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          access_log:
+          - name: envoy.access_loggers.file
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
+              path: "/dev/stdout"
+              format: |
+                {
+                  "thinkrank_service": "%{THINKRANK_SERVICE}o",
+                  "timestamp": "%START_TIME%",
+                  "method": "%REQ(:METHOD)%",
+                  "path": "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%",
+                  "response_code": "%RESPONSE_CODE%",
+                  "duration": "%DURATION%",
+                  "upstream_service_time": "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%",
+                  "request_id": "%REQ(X-REQUEST-ID)%",
+                  "user_agent": "%REQ(USER-AGENT)%",
+                  "remote_address": "%DOWNSTREAM_REMOTE_ADDRESS%",
+                  "bytes_received": "%BYTES_RECEIVED%",
+                  "bytes_sent": "%BYTES_SENT%",
+                  "istio_version": "%{ISTIO_VERSION}o"
+                }

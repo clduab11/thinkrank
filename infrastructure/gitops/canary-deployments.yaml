@@ -1,0 +1,432 @@
+# Flagger Canary Deployments with Istio Traffic Management
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: game-service
+  namespace: thinkrank
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: game-service
+  progressDeadlineSeconds: 60
+  autoscalerRef:
+    apiVersion: autoscaling/v2
+    kind: HorizontalPodAutoscaler
+    name: game-service-hpa
+  service:
+    port: 3002
+    targetPort: 3002
+    gateways:
+    - thinkrank-gateway
+    hosts:
+    - api.thinkrank.com
+    trafficPolicy:
+      tls:
+        mode: ISTIO_MUTUAL
+    retries:
+      attempts: 3
+      perTryTimeout: 30s
+      retryOn: gateway-error,connect-failure,refused-stream
+  analysis:
+    interval: 30s
+    threshold: 5
+    maxWeight: 50
+    stepWeight: 10
+    metrics:
+    - name: request-success-rate
+      thresholdRange:
+        min: 99
+      interval: 1m
+    - name: request-duration
+      thresholdRange:
+        max: 500
+      interval: 30s
+    - name: error-rate
+      thresholdRange:
+        max: 1
+      interval: 30s
+    webhooks:
+    - name: acceptance-test
+      type: pre-rollout
+      url: http://flagger-loadtester.test/
+      timeout: 30s
+      metadata:
+        type: bash
+        cmd: "curl -sd 'test' http://game-service-canary.thinkrank:3002/api/game/health | grep -q 'healthy'"
+    - name: load-test
+      type: rollout
+      url: http://flagger-loadtester.test/
+      metadata:
+        cmd: "hey -z 1m -q 10 -c 2 http://game-service-canary.thinkrank:3002/api/game/challenges"
+    - name: integration-test
+      type: rollout
+      url: http://flagger-loadtester.test/
+      metadata:
+        type: bash
+        cmd: |
+          # Run comprehensive integration tests
+          kubectl run integration-test --rm -i --restart=Never \
+            --image=curlimages/curl -- sh -c '
+            # Test game session creation
+            response=$(curl -s -X POST http://game-service-canary.thinkrank:3002/api/game/sessions \
+              -H "Content-Type: application/json" \
+              -d "{\"userId\": \"test-user\", \"gameType\": \"research\"}")
+            echo $response | grep -q "sessionId" || exit 1
+            
+            # Test game challenge endpoint
+            curl -f http://game-service-canary.thinkrank:3002/api/game/challenges || exit 1
+            
+            # Test leaderboard endpoint
+            curl -f http://game-service-canary.thinkrank:3002/api/game/leaderboard || exit 1
+          '
+
+---
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: ai-service
+  namespace: thinkrank
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-service
+  progressDeadlineSeconds: 120
+  autoscalerRef:
+    apiVersion: autoscaling/v2
+    kind: HorizontalPodAutoscaler
+    name: ai-service-hpa
+  service:
+    port: 3003
+    targetPort: 3003
+    gateways:
+    - thinkrank-gateway
+    hosts:
+    - api.thinkrank.com
+    trafficPolicy:
+      tls:
+        mode: ISTIO_MUTUAL
+      connectionPool:
+        tcp:
+          maxConnections: 10
+        http:
+          http1MaxPendingRequests: 10
+          maxRequestsPerConnection: 2
+      outlierDetection:
+        consecutiveErrors: 3
+        interval: 30s
+        baseEjectionTime: 30s
+  analysis:
+    interval: 60s
+    threshold: 3
+    maxWeight: 30
+    stepWeight: 5
+    metrics:
+    - name: request-success-rate
+      thresholdRange:
+        min: 95
+      interval: 2m
+    - name: request-duration
+      thresholdRange:
+        max: 2000  # AI service can be slower
+      interval: 1m
+    - name: cpu-usage
+      thresholdRange:
+        max: 80
+      interval: 1m
+    - name: memory-usage
+      thresholdRange:
+        max: 85
+      interval: 1m
+    webhooks:
+    - name: ai-model-validation
+      type: pre-rollout
+      url: http://flagger-loadtester.test/
+      timeout: 60s
+      metadata:
+        type: bash
+        cmd: |
+          # Validate AI model endpoints
+          kubectl run ai-validation --rm -i --restart=Never \
+            --image=curlimages/curl -- sh -c '
+            # Test bias detection endpoint
+            response=$(curl -s -X POST http://ai-service-canary.thinkrank:3003/api/ai/detect-bias \
+              -H "Content-Type: application/json" \
+              -d "{\"text\": \"test research paper\"}")
+            echo $response | grep -q "biasScore" || exit 1
+            
+            # Test research evaluation
+            response=$(curl -s -X POST http://ai-service-canary.thinkrank:3003/api/ai/evaluate-research \
+              -H "Content-Type: application/json" \
+              -d "{\"research\": \"sample research content\"}")
+            echo $response | grep -q "evaluation" || exit 1
+          '
+    - name: ai-load-test
+      type: rollout
+      url: http://flagger-loadtester.test/
+      metadata:
+        cmd: "hey -z 2m -q 5 -c 1 -m POST -H 'Content-Type: application/json' -d '{\"text\":\"test\"}' http://ai-service-canary.thinkrank:3003/api/ai/detect-bias"
+
+---
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: auth-service
+  namespace: thinkrank
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service
+  progressDeadlineSeconds: 60
+  autoscalerRef:
+    apiVersion: autoscaling/v2
+    kind: HorizontalPodAutoscaler
+    name: auth-service-hpa
+  service:
+    port: 3001
+    targetPort: 3001
+    gateways:
+    - thinkrank-gateway
+    hosts:
+    - api.thinkrank.com
+    trafficPolicy:
+      tls:
+        mode: ISTIO_MUTUAL
+  analysis:
+    interval: 30s
+    threshold: 5
+    maxWeight: 50
+    stepWeight: 10
+    metrics:
+    - name: request-success-rate
+      thresholdRange:
+        min: 99.5  # Higher threshold for auth service
+      interval: 1m
+    - name: request-duration
+      thresholdRange:
+        max: 200  # Auth should be fast
+      interval: 30s
+    webhooks:
+    - name: auth-security-test
+      type: pre-rollout
+      url: http://flagger-loadtester.test/
+      timeout: 30s
+      metadata:
+        type: bash
+        cmd: |
+          # Security validation for auth service
+          kubectl run auth-security-test --rm -i --restart=Never \
+            --image=curlimages/curl -- sh -c '
+            # Test JWT token validation
+            token=$(curl -s -X POST http://auth-service-canary.thinkrank:3001/api/auth/login \
+              -H "Content-Type: application/json" \
+              -d "{\"email\":\"test@example.com\",\"password\":\"test123\"}" | \
+              grep -o "\"token\":\"[^\"]*" | cut -d"\"" -f4)
+            
+            if [ -n "$token" ]; then
+              curl -f -H "Authorization: Bearer $token" \
+                http://auth-service-canary.thinkrank:3001/api/auth/verify || exit 1
+            fi
+            
+            # Test password reset endpoint
+            curl -f -X POST http://auth-service-canary.thinkrank:3001/api/auth/reset-password \
+              -H "Content-Type: application/json" \
+              -d "{\"email\":\"test@example.com\"}" || exit 1
+          '
+
+---
+# Flagger Load Tester for automated testing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flagger-loadtester
+  namespace: test
+  labels:
+    app: flagger-loadtester
+spec:
+  selector:
+    matchLabels:
+      app: flagger-loadtester
+  template:
+    metadata:
+      labels:
+        app: flagger-loadtester
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: loadtester
+        image: ghcr.io/fluxcd/flagger-loadtester:0.32.0
+        ports:
+        - name: http
+          containerPort: 8080
+        command:
+        - ./loadtester
+        - -port=8080
+        - -log-level=info
+        - -timeout=1h
+        env:
+        - name: TIMEOUT
+          value: "1h"
+        livenessProbe:
+          exec:
+            command:
+            - wget
+            - --quiet
+            - --tries=1
+            - --timeout=4
+            - --spider
+            - http://localhost:8080/healthz
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - wget
+            - --quiet
+            - --tries=1
+            - --timeout=4
+            - --spider
+            - http://localhost:8080/healthz
+          timeoutSeconds: 5
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+          requests:
+            memory: "64Mi"
+            cpu: "10m"
+        securityContext:
+          readOnlyRootFilesystem: true
+          runAsUser: 10001
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flagger-loadtester
+  namespace: test
+  labels:
+    app: flagger-loadtester
+spec:
+  type: ClusterIP
+  selector:
+    app: flagger-loadtester
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: http
+
+---
+# Prometheus rules for canary analysis
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: thinkrank-canary-rules
+  namespace: thinkrank
+spec:
+  groups:
+  - name: thinkrank.canary.rules
+    rules:
+    - record: thinkrank_request_success_rate
+      expr: |
+        sum(
+          rate(
+            istio_requests_total{
+              destination_service_namespace="thinkrank",
+              response_code!~"5.*"
+            }[1m]
+          )
+        ) /
+        sum(
+          rate(
+            istio_requests_total{
+              destination_service_namespace="thinkrank"
+            }[1m]
+          )
+        ) * 100
+
+    - record: thinkrank_request_duration
+      expr: |
+        histogram_quantile(0.95,
+          sum(
+            rate(
+              istio_request_duration_milliseconds_bucket{
+                destination_service_namespace="thinkrank"
+              }[1m]
+            )
+          ) by (le, destination_service_name)
+        )
+
+    - record: thinkrank_error_rate
+      expr: |
+        sum(
+          rate(
+            istio_requests_total{
+              destination_service_namespace="thinkrank",
+              response_code=~"5.*"
+            }[1m]
+          )
+        ) /
+        sum(
+          rate(
+            istio_requests_total{
+              destination_service_namespace="thinkrank"
+            }[1m]
+          )
+        ) * 100
+
+---
+# Canary analysis template for custom metrics
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: thinkrank-success-rate
+  namespace: thinkrank
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus-server.thinkrank.svc.cluster.local:80
+  query: |
+    sum(
+      rate(
+        istio_requests_total{
+          destination_service_name="{{name}}",
+          destination_service_namespace="{{namespace}}",
+          response_code!~"5.*"
+        }[{{interval}}]
+      )
+    ) /
+    sum(
+      rate(
+        istio_requests_total{
+          destination_service_name="{{name}}",
+          destination_service_namespace="{{namespace}}"
+        }[{{interval}}]
+      )
+    ) * 100
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: thinkrank-request-duration
+  namespace: thinkrank
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus-server.thinkrank.svc.cluster.local:80
+  query: |
+    histogram_quantile(0.95,
+      sum(
+        rate(
+          istio_request_duration_milliseconds_bucket{
+            destination_service_name="{{name}}",
+            destination_service_namespace="{{namespace}}"
+          }[{{interval}}]
+        )
+      ) by (le)
+    )

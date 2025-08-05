@@ -5,10 +5,13 @@ import {
   ResearchContribution,
   ValidationStatus
 } from '../models/research-problem.model';
+import { Logger } from '../../../shared/src/utils/logger';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+const logger = Logger.getInstance('contribution-service');
 
 export class ContributionService {
   /**
@@ -311,10 +314,10 @@ export class ContributionService {
       // For peer review or expert review, mark as pending and queue for review
       else {
         // Could implement queuing system here
-        console.log(`Contribution ${contribution.contributionId} queued for ${criteria.validationMethod}`);
+        logger.info(`Contribution ${contribution.contributionId} queued for ${criteria.validationMethod}`);
       }
     } catch (error) {
-      console.error('Error initiating validation:', error);
+      logger.error('Error initiating validation', { error });
     }
   }
 
@@ -365,7 +368,7 @@ export class ContributionService {
         }
       }
     } catch (error) {
-      console.error('Error checking validation status:', error);
+      logger.error('Error checking validation status', { error });
     }
   }
 
@@ -402,10 +405,10 @@ export class ContributionService {
         .eq('user_id', contribution.user_id);
 
       if (updateError) {
-        console.error('Error updating user progress:', updateError);
+        logger.error('Error updating user progress', { error: updateError });
       }
     } catch (error) {
-      console.error('Error updating user progress:', error);
+      logger.error('Error updating user progress', { error });
     }
   }
 

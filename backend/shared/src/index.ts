@@ -19,6 +19,29 @@ export type {
 // Types - Supabase generated types
 export type { Database, Json } from './types/supabase';
 
+// Types - JWT authentication
+export type {
+  AccessTokenPayload,
+  isAccessTokenPayload,
+  isRefreshTokenPayload,
+  isValidJwtPayload,
+  JwtTokenPayload,
+  RefreshTokenPayload,
+  TokenPair
+} from './types/jwt';
+
+// Types - Error handling
+export type {
+  DatabaseError,
+  isDatabaseError,
+  isJoiValidationError,
+  isSupabaseError,
+  JoiValidationDetail,
+  JoiValidationError,
+  JsonSyntaxError,
+  SupabaseError
+} from './types/errors';
+
 // Configuration
 export {
   DatabaseTransaction, getDatabase, getDatabaseConfig, QueryBuilder, SupabaseClientFactory
@@ -56,7 +79,7 @@ export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
 
 // Common response helpers
-export const createSuccessResponse = <T>(data: T, meta?: any) => ({
+export const createSuccessResponse = <T>(data: T, meta?: Record<string, unknown>) => ({
   success: true as const,
   data,
   meta: {
@@ -66,7 +89,7 @@ export const createSuccessResponse = <T>(data: T, meta?: any) => ({
   }
 });
 
-export const createErrorResponse = (error: any, meta?: any) => ({
+export const createErrorResponse = (error: AppError | { code: string; message: string; details?: unknown }, meta?: Record<string, unknown>) => ({
   success: false as const,
   error,
   meta: {

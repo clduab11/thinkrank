@@ -357,8 +357,8 @@ class AchievementService {
 
   private async checkAchievementRequirement(
     achievement: Achievement,
-    progressData: any,
-    contributionsData: any[],
+    progressData: Record<string, unknown>,
+    contributionsData: Record<string, unknown>[],
     userId: string
   ): Promise<boolean> {
     const { requirements } = achievement;
@@ -396,8 +396,8 @@ class AchievementService {
 
   private getCurrentValue(
     achievement: Achievement,
-    progressData: any,
-    contributionsData: any[]
+    progressData: Record<string, unknown>,
+    contributionsData: Record<string, unknown>[]
   ): number {
     const { requirements } = achievement;
 

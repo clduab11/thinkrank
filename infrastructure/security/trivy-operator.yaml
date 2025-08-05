@@ -1,0 +1,355 @@
+# Trivy Operator for Continuous Container Security Scanning
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trivy-system
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trivy-operator
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://aquasecurity.github.io/helm-charts/
+    chart: trivy-operator
+    targetRevision: 0.18.0
+    helm:
+      values: |
+        serviceMonitor:
+          enabled: true
+          labels:
+            app: trivy-operator
+        
+        trivyOperator:
+          vulnerabilityReportsPlugin: "Trivy"
+          configAuditReportsPlugin: "Trivy"
+          exposeSecretReportsPlugin: "Trivy"
+          rbacAssessmentReportsPlugin: "Trivy"
+          infraAssessmentReportsPlugin: "Trivy"
+          clusterComplianceReportsPlugin: "Trivy"
+          
+          scanJobTimeout: 5m
+          scanJobsConcurrentLimit: 10
+          scanJobsRetryDelay: 30s
+          
+          vulnerabilityScannerEnabled: true
+          configAuditScannerEnabled: true
+          exposeSecretScannerEnabled: true
+          rbacAssessmentScannerEnabled: true
+          infraAssessmentScannerEnabled: true
+          clusterComplianceScannerEnabled: true
+          
+          batchDeleteLimit: 10
+          batchDeleteDelay: 10s
+          
+          metricsBindAddress: ":8080"
+          probeBindAddress: ":9090"
+          logLevel: 1
+          
+          builtInTrivyServer: false
+          
+        trivy:
+          mode: ClientServer
+          serverURL: "http://trivy-server.trivy-system.svc.cluster.local:4954"
+          
+          ignoreUnfixed: false
+          ignoreFile: |
+            # Ignore specific vulnerabilities
+            CVE-2023-0001
+            CVE-2023-0002
+          
+          severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
+          
+          dbRepository: "ghcr.io/aquasecurity/trivy-db"
+          javaDbRepository: "ghcr.io/aquasecurity/trivy-java-db"
+          
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+              
+        operator:
+          replicas: 1
+          
+          leaderElectionEnabled: true
+          leaderElectionID: "trivyoperator-lock"
+          
+          logLevel: 1
+          scanJobTimeout: 5m
+          
+          webhookBroadcastURL: ""
+          webhookBroadcastTimeout: 30s
+          webhookSendDeletedReports: false
+          
+          privateRegistryScanSecretsNames: {}
+          
+          mergeRbacFindingWithConfigAudit: false
+          
+          resources:
+            requests:
+              cpu: 100m
+              memory: 120Mi
+            limits:
+              cpu: 500m
+              memory: 300Mi
+              
+          env:
+          - name: OPERATOR_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: OPERATOR_TARGET_WORKLOADS
+            value: "pod,replicaset,replicationcontroller,statefulset,daemonset,cronjob,job"
+          - name: OPERATOR_LOG_DEV_MODE
+            value: "false"
+          - name: OPERATOR_SCAN_JOB_RETRY_AFTER
+            value: "30s"
+          - name: OPERATOR_METRICS_BIND_ADDRESS
+            value: ":8080"
+          - name: OPERATOR_HEALTH_PROBE_BIND_ADDRESS
+            value: ":9090"
+          - name: OPERATOR_CIS_KUBERNETES_BENCHMARK_ENABLED
+            value: "true"
+          - name: OPERATOR_VULNERABILITY_SCANNER_ENABLED
+            value: "true"
+          - name: OPERATOR_CONFIG_AUDIT_SCANNER_ENABLED
+            value: "true"
+          - name: OPERATOR_RBAC_ASSESSMENT_SCANNER_ENABLED
+            value: "true"
+          - name: OPERATOR_INFRA_ASSESSMENT_SCANNER_ENABLED
+            value: "true"
+          - name: OPERATOR_CLUSTER_COMPLIANCE_ENABLED
+            value: "true"
+          - name: OPERATOR_WEBHOOK_BROADCAST_TIMEOUT
+            value: "30s"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: trivy-system
+    
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trivy-server
+  namespace: trivy-system
+  labels:
+    app: trivy-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: trivy-server
+  template:
+    metadata:
+      labels:
+        app: trivy-server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      serviceAccountName: trivy-server
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+      - name: trivy-server
+        image: aquasec/trivy:0.47.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - server
+        - --listen
+        - 0.0.0.0:4954
+        - --cache-dir
+        - /tmp/trivy/.cache
+        - --log-level
+        - info
+        ports:
+        - name: trivy-http
+          containerPort: 4954
+        - name: metrics
+          containerPort: 9090
+        livenessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /healthz
+            port: trivy-http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 10
+        readinessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /healthz
+            port: trivy-http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-data
+          readOnly: false
+        - mountPath: /etc/ssl/certs/
+          name: ca-certs
+          readOnly: true
+        env:
+        - name: TRIVY_LISTEN
+          value: "0.0.0.0:4954"
+        - name: TRIVY_CACHE_DIR
+          value: /tmp/trivy/.cache
+        - name: TRIVY_DEBUG
+          value: "false"
+        - name: TRIVY_SKIP_UPDATE
+          value: "false"
+        - name: TRIVY_DB_REPOSITORY
+          value: ghcr.io/aquasecurity/trivy-db
+        - name: TRIVY_JAVA_DB_REPOSITORY
+          value: ghcr.io/aquasecurity/trivy-java-db
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1
+            memory: 2Gi
+      volumes:
+      - name: tmp-data
+        emptyDir: {}
+      - name: ca-certs
+        configMap:
+          name: ca-certs
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trivy-server
+  namespace: trivy-system
+  labels:
+    app: trivy-server
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+spec:
+  ports:
+  - name: trivy-http
+    port: 4954
+    protocol: TCP
+    targetPort: trivy-http
+  - name: metrics
+    port: 9090
+    protocol: TCP
+    targetPort: metrics
+  selector:
+    app: trivy-server
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trivy-server
+  namespace: trivy-system
+
+---
+# Policy for vulnerability scanning
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-vulnerability-scan
+  annotations:
+    policies.kyverno.io/title: Require Vulnerability Scan Results
+    policies.kyverno.io/category: Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Pods must have a vulnerability scan report from Trivy.
+spec:
+  validationFailureAction: enforce
+  background: false
+  rules:
+  - name: check-vulnerability-scan
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - thinkrank
+    validate:
+      message: "Pod must have a vulnerability scan report"
+      foreach:
+      - list: "request.object.spec.containers"
+        elementScope: true
+        deny:
+          conditions:
+            any:
+            - key: "{{ lookup('aquasecurity.github.io/v1alpha1', 'VulnerabilityReport', request.object.metadata.namespace, '{{ request.object.metadata.name }}-{{ element.name }}') || `{}` | length(@) }}"
+              operator: Equals
+              value: 0
+
+---
+# Network Policy for Trivy Server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trivy-server-network-policy
+  namespace: trivy-system
+spec:
+  podSelector:
+    matchLabels:
+      app: trivy-server
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: trivy-system
+    - namespaceSelector:
+        matchLabels:
+          name: thinkrank
+    ports:
+    - protocol: TCP
+      port: 4954
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

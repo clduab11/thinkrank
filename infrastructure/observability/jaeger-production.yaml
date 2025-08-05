@@ -1,0 +1,219 @@
+# Production Jaeger Configuration with High Availability
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: jaeger-production
+  namespace: observability
+spec:
+  strategy: production
+  
+  collector:
+    replicas: 3
+    image: jaegertracing/jaeger-collector:1.51.0
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 500m
+      limits:
+        memory: 2Gi
+        cpu: 2
+    options:
+      collector:
+        queue-size: 5000
+        num-workers: 50
+        grpc-server:
+          max-message-size: 4194304
+        http-server:
+          host-port: ":14268"
+        kafka:
+          producer:
+            topic: jaeger-spans
+            brokers: kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
+            batch-size: 1000
+            batch-timeout: 1s
+    env:
+    - name: SPAN_STORAGE_TYPE
+      value: elasticsearch
+    - name: ES_SERVER_URLS
+      value: http://elasticsearch.logging.svc.cluster.local:9200
+    - name: ES_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: jaeger-secrets
+          key: es-username
+    - name: ES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: jaeger-secrets
+          key: es-password
+    - name: ES_INDEX_PREFIX
+      value: thinkrank-jaeger
+
+  query:
+    replicas: 2
+    image: jaegertracing/jaeger-query:1.51.0
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 200m
+      limits:
+        memory: 1Gi
+        cpu: 1
+    options:
+      query:
+        base-path: /jaeger
+        max-traces: 1000
+        default-depends-on-service-seconds: 604800  # 7 days
+      log-level: info
+    env:
+    - name: SPAN_STORAGE_TYPE
+      value: elasticsearch
+    - name: ES_SERVER_URLS
+      value: http://elasticsearch.logging.svc.cluster.local:9200
+    - name: ES_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: jaeger-secrets
+          key: es-username
+    - name: ES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: jaeger-secrets
+          key: es-password
+    - name: ES_INDEX_PREFIX
+      value: thinkrank-jaeger
+
+  agent:
+    strategy: DaemonSet
+    image: jaegertracing/jaeger-agent:1.51.0
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 50m
+      limits:
+        memory: 128Mi
+        cpu: 200m
+    options:
+      agent:
+        collector:
+          grpc: jaeger-production-collector.observability.svc.cluster.local:14250
+
+  ingester:
+    replicas: 3
+    image: jaegertracing/jaeger-ingester:1.51.0
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 500m
+      limits:
+        memory: 2Gi
+        cpu: 2
+    options:
+      ingester:
+        kafka:
+          consumer:
+            topic: jaeger-spans
+            brokers: kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
+            group-id: jaeger-ingester
+          encoding: json
+          dead-letter-topic: jaeger-spans-dead-letter
+      log-level: info
+    env:
+    - name: SPAN_STORAGE_TYPE
+      value: elasticsearch
+    - name: ES_SERVER_URLS
+      value: http://elasticsearch.logging.svc.cluster.local:9200
+    - name: ES_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: jaeger-secrets
+          key: es-username
+    - name: ES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: jaeger-secrets
+          key: es-password
+    - name: ES_INDEX_PREFIX
+      value: thinkrank-jaeger
+
+  storage:
+    type: elasticsearch
+    elasticsearch:
+      nodeCount: 3
+      redundancyPolicy: SingleRedundancy
+      resources:
+        requests:
+          memory: 2Gi
+          cpu: 1
+        limits:
+          memory: 4Gi
+          cpu: 2
+      storage:
+        storageClassName: gp2-encrypted
+        size: 100Gi
+    options:
+      es:
+        server-urls: http://elasticsearch.logging.svc.cluster.local:9200
+        index-prefix: thinkrank-jaeger
+        create-index-templates: true
+        version: 7
+        tls:
+          enabled: false
+        bulk:
+          actions: 1000
+          size: 5242880  # 5MB
+          workers: 1
+          flush-interval: 200ms
+
+  volumeMounts:
+  - name: certificates
+    mountPath: /etc/ssl/certs
+    readOnly: true
+
+  volumes:
+  - name: certificates
+    secret:
+      secretName: jaeger-tls-certs
+
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "14269"
+    prometheus.io/path: "/metrics"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jaeger-secrets
+  namespace: observability
+type: Opaque
+stringData:
+  es-username: "jaeger"
+  es-password: "CHANGE_ME_IN_PRODUCTION"
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jaeger-query-ingress
+  namespace: observability
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - jaeger.thinkrank.com
+    secretName: jaeger-tls
+  rules:
+  - host: jaeger.thinkrank.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jaeger-production-query
+            port:
+              number: 16686

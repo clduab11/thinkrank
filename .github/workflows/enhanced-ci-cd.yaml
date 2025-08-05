@@ -1,0 +1,548 @@
+# Enhanced CI/CD Pipeline with Security, Observability, and Multi-stage Builds
+name: Enhanced CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, feature/*, release/* ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * *'  # Daily security scans
+
+env:
+  NODE_VERSION: '20.10.0'
+  UNITY_VERSION: '2023.3.0f1'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Pre-flight security and quality checks
+  security-lint:
+    name: Security & Code Quality
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scan-type: [sast, secrets, dependencies, containers]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js with caching
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: |
+          package-lock.json
+          backend/services/*/package-lock.json
+          frontend/package-lock.json
+
+    # SAST Scanning
+    - name: SAST with CodeQL
+      if: matrix.scan-type == 'sast'
+      uses: github/codeql-action/init@v3
+      with:
+        languages: javascript, typescript
+        
+    - name: Autobuild for SAST
+      if: matrix.scan-type == 'sast'
+      uses: github/codeql-action/autobuild@v3
+      
+    - name: Perform CodeQL Analysis
+      if: matrix.scan-type == 'sast'
+      uses: github/codeql-action/analyze@v3
+
+    # Secret Scanning
+    - name: Secret Detection
+      if: matrix.scan-type == 'secrets'
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+
+    # Dependency Scanning
+    - name: Dependency Security Scan
+      if: matrix.scan-type == 'dependencies'
+      uses: anchore/sbom-action@v0
+      with:
+        path: ./
+        format: spdx-json
+
+    - name: Vulnerability Scan with Grype
+      if: matrix.scan-type == 'dependencies'
+      uses: anchore/scan-action@v3
+      with:
+        path: "."
+        fail-build: true
+        severity-cutoff: high
+
+    # Container Scanning
+    - name: Container Security with Trivy  
+      if: matrix.scan-type == 'containers'
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      if: matrix.scan-type == 'containers'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Parallel testing with comprehensive coverage
+  test-matrix:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: security-lint
+    strategy:
+      fail-fast: false
+      matrix:
+        test-type: [unit, integration, e2e, performance]
+        service: [auth-service, game-service, ai-service, social-service, analytics-service]
+        include:
+          - test-type: unit
+            coverage: true
+          - test-type: integration
+            docker-compose: true
+          - test-type: e2e
+            browser: chrome
+          - test-type: performance
+            load-test: true
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+          
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js with caching
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm ci --workspace=backend/services/${{ matrix.service }}
+
+    - name: Setup test database
+      if: matrix.test-type == 'integration'
+      run: |
+        npm run db:migrate:test
+        npm run db:seed:test
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+
+    - name: Unit Tests
+      if: matrix.test-type == 'unit'
+      run: |
+        npm run test:unit --workspace=backend/services/${{ matrix.service }} -- --coverage
+      env:
+        NODE_ENV: test
+
+    - name: Integration Tests
+      if: matrix.test-type == 'integration'
+      run: |
+        npm run test:integration --workspace=backend/services/${{ matrix.service }}
+      env:
+        NODE_ENV: test
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379
+
+    - name: E2E Tests
+      if: matrix.test-type == 'e2e'
+      run: |
+        npm run test:e2e
+      env:
+        NODE_ENV: test
+        BROWSER: ${{ matrix.browser }}
+
+    - name: Performance Tests
+      if: matrix.test-type == 'performance'
+      run: |
+        npm run test:performance --workspace=backend/services/${{ matrix.service }}
+      env:
+        NODE_ENV: test
+
+    - name: Upload coverage reports
+      if: matrix.coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: backend/services/${{ matrix.service }}/coverage/lcov.info
+        flags: ${{ matrix.service }}
+        name: ${{ matrix.service }}-coverage
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.service }}-${{ matrix.test-type }}
+        path: |
+          backend/services/${{ matrix.service }}/coverage/
+          backend/services/${{ matrix.service }}/test-results/
+          performance-results/
+
+  # Multi-stage Docker builds with security scanning
+  docker-build:
+    name: Multi-stage Docker Build
+    runs-on: ubuntu-latest
+    needs: test-matrix
+    if: github.event_name != 'pull_request'
+    strategy:
+      matrix:
+        service: [auth-service, game-service, ai-service, social-service, analytics-service, api-gateway, frontend]
+    
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          network=host
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ matrix.service == 'frontend' && './frontend' || format('./backend/services/{0}', matrix.service) }}
+        file: ${{ matrix.service == 'frontend' && './frontend/Dockerfile.multistage' || format('./backend/services/{0}/Dockerfile.multistage', matrix.service) }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+        build-args: |
+          NODE_VERSION=${{ env.NODE_VERSION }}
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          VCS_REF=${{ github.sha }}
+
+    - name: Container Security Scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}:${{ github.sha }}
+        format: 'sarif'
+        output: 'trivy-${{ matrix.service }}.sarif'
+
+    - name: Upload container scan results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-${{ matrix.service }}.sarif'
+
+  # Unity Cloud Build Integration
+  unity-cloud-build:
+    name: Unity Cloud Build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    strategy:
+      matrix:
+        platform: [iOS, Android, WebGL]
+        
+    steps:
+    - name: Unity Cloud Build API
+      run: |
+        curl -X POST \
+          -H "Authorization: Basic ${{ secrets.UNITY_CLOUD_BUILD_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "clean": true,
+            "delay": 0
+          }' \
+          "https://build-api.cloud.unity3d.com/api/v1/orgs/${{ secrets.UNITY_ORG_ID }}/projects/${{ secrets.UNITY_PROJECT_ID }}/buildtargets/${{ matrix.platform }}/builds"
+
+    - name: Wait for build completion
+      run: |
+        sleep 300  # Wait 5 minutes for build to start
+        # Poll for build status
+        for i in {1..30}; do
+          BUILD_STATUS=$(curl -s \
+            -H "Authorization: Basic ${{ secrets.UNITY_CLOUD_BUILD_API_KEY }}" \
+            "https://build-api.cloud.unity3d.com/api/v1/orgs/${{ secrets.UNITY_ORG_ID }}/projects/${{ secrets.UNITY_PROJECT_ID }}/buildtargets/${{ matrix.platform }}/builds" \
+            | jq -r '.[0].buildStatus')
+          
+          if [[ "$BUILD_STATUS" == "success" ]]; then
+            echo "Build completed successfully"
+            break
+          elif [[ "$BUILD_STATUS" == "failure" ]]; then
+            echo "Build failed"
+            exit 1
+          fi
+          
+          echo "Build status: $BUILD_STATUS. Waiting..."
+          sleep 30
+        done
+
+  # OpenTelemetry and Observability Setup
+  observability-setup:
+    name: Deploy Observability
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Deploy OpenTelemetry Collector
+      run: |
+        aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name thinkrank-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+        
+        # Deploy OpenTelemetry Operator
+        kubectl apply -f https://github.com/open-telemetry/opentelemetry-operator/releases/latest/download/opentelemetry-operator.yaml
+        
+        # Deploy custom OpenTelemetry configuration
+        kubectl apply -f infrastructure/observability/otel-collector.yaml
+        kubectl apply -f infrastructure/observability/jaeger.yaml
+        kubectl apply -f infrastructure/observability/grafana-enhanced.yaml
+
+    - name: Configure Distributed Tracing
+      run: |
+        # Install Jaeger operator
+        kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+        kubectl apply -f https://github.com/jaegertracing/jaeger-operator/releases/download/v1.51.0/jaeger-operator.yaml -n observability
+        
+        # Deploy Jaeger instance
+        kubectl apply -f infrastructure/observability/jaeger-production.yaml
+
+  # GitOps with ArgoCD Deployment
+  gitops-deploy:
+    name: GitOps Deployment
+    runs-on: ubuntu-latest
+    needs: [docker-build, observability-setup]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name thinkrank-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+
+    - name: Deploy ArgoCD if not exists
+      run: |
+        if ! kubectl get namespace argocd; then
+          kubectl create namespace argocd
+          kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+          
+          # Wait for ArgoCD to be ready
+          kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
+        fi
+
+    - name: Configure ArgoCD Applications
+      run: |
+        # Apply ArgoCD application configurations
+        envsubst < infrastructure/gitops/application-${{ github.ref_name == 'main' && 'prod' || 'dev' }}.yaml | kubectl apply -f -
+
+    - name: Trigger Blue-Green Deployment
+      if: github.ref == 'refs/heads/main'
+      run: |
+        # Update image tags in GitOps repository
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Clone GitOps repository
+        git clone https://${{ secrets.GITOPS_TOKEN }}@github.com/${{ github.repository }}-gitops.git
+        cd ${{ github.repository }}-gitops
+        
+        # Update image tags
+        for service in auth-service game-service ai-service social-service analytics-service api-gateway frontend; do
+          sed -i "s|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${service}:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${service}:${{ github.sha }}|g" overlays/production/kustomization.yaml
+        done
+        
+        git add .
+        git commit -m "Update image tags to ${{ github.sha }}"
+        git push
+
+  # Canary Release Management
+  canary-deployment:
+    name: Canary Deployment
+    runs-on: ubuntu-latest
+    needs: gitops-deploy
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name thinkrank-prod
+
+    - name: Deploy Canary with Flagger
+      run: |
+        # Install Flagger if not exists
+        if ! kubectl get crd canaries.flagger.app; then
+          kubectl apply -k github.com/fluxcd/flagger//kustomize/istio
+        fi
+        
+        # Deploy canary configurations
+        kubectl apply -f infrastructure/gitops/canary-deployments.yaml
+
+    - name: Monitor Canary Metrics
+      run: |
+        # Wait for canary analysis
+        for service in game-service ai-service; do
+          echo "Monitoring canary deployment for $service..."
+          kubectl wait --for=condition=Promoted canary/$service -n thinkrank --timeout=1200s
+        done
+
+  # Automated Rollback on Failure
+  rollback-on-failure:
+    name: Automated Rollback
+    runs-on: ubuntu-latest
+    needs: canary-deployment
+    if: failure() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name thinkrank-prod
+
+    - name: Automated Rollback
+      run: |
+        # Rollback all deployments to previous version
+        for service in auth-service game-service ai-service social-service analytics-service api-gateway frontend; do
+          kubectl rollout undo deployment/$service -n thinkrank
+          kubectl rollout status deployment/$service -n thinkrank --timeout=300s
+        done
+
+    - name: Notify on Rollback
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: "🚨 Automated rollback executed for production deployment"
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Post-deployment validation and monitoring
+  post-deploy-validation:
+    name: Post-Deploy Validation
+    runs-on: ubuntu-latest
+    needs: [gitops-deploy, canary-deployment]
+    if: always() && (needs.gitops-deploy.result == 'success' || needs.canary-deployment.result == 'success')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Health Check Validation
+      run: |
+        # Validate all service endpoints
+        for service in auth game ai social; do
+          curl -f https://api.thinkrank.com/api/$service/health || exit 1
+        done
+
+    - name: Performance Regression Testing
+      run: |
+        npm install -g @artillery/core
+        artillery run tests/performance/production-load-test.yml
+
+    - name: Security Posture Validation
+      run: |
+        # Validate security configurations
+        kubectl auth can-i create pods --as=system:anonymous -n thinkrank | grep -q "no" || exit 1
+
+    - name: Generate Deployment Report
+      run: |
+        echo "## Deployment Report" > deployment-report.md
+        echo "- Timestamp: $(date)" >> deployment-report.md
+        echo "- Commit: ${{ github.sha }}" >> deployment-report.md
+        echo "- Environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}" >> deployment-report.md
+        echo "- Status: Success" >> deployment-report.md
+
+    - name: Upload Deployment Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-report-${{ github.run_number }}
+        path: deployment-report.md

@@ -1,0 +1,345 @@
+# ArgoCD Applications for GitOps-based Continuous Delivery
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: thinkrank-infrastructure
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thinkrank/thinkrank-gitops.git
+    targetRevision: HEAD
+    path: infrastructure/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: thinkrank
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - Validate=true
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 3
+  info:
+  - name: 'Description'
+    value: 'ThinkRank Infrastructure Components'
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: thinkrank-services
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thinkrank/thinkrank-gitops.git
+    targetRevision: HEAD
+    path: applications/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: thinkrank
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - Validate=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+    - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 3
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  - group: argoproj.io
+    kind: Rollout
+    jsonPointers:
+    - /spec/replicas
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: thinkrank-monitoring
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: monitoring
+  source:
+    repoURL: https://github.com/thinkrank/thinkrank-gitops.git
+    targetRevision: HEAD
+    path: monitoring/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        maxDuration: 1m
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: thinkrank-project
+  namespace: argocd
+spec:
+  description: ThinkRank Project Configuration
+  sourceRepos:
+  - 'https://github.com/thinkrank/thinkrank-gitops.git'
+  - 'https://helm.thinkrank.com/*'
+  destinations:
+  - namespace: thinkrank
+    server: https://kubernetes.default.svc
+  - namespace: thinkrank-*
+    server: https://kubernetes.default.svc
+  - namespace: monitoring
+    server: https://kubernetes.default.svc
+  - namespace: observability
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  - group: networking.istio.io
+    kind: Gateway
+  - group: networking.istio.io
+    kind: VirtualService
+  - group: security.istio.io
+    kind: AuthorizationPolicy
+  - group: security.istio.io
+    kind: PeerAuthentication
+  namespaceResourceWhitelist:
+  - group: ''
+    kind: Service
+  - group: ''
+    kind: ConfigMap
+  - group: ''
+    kind: Secret
+  - group: apps
+    kind: Deployment
+  - group: apps
+    kind: StatefulSet
+  - group: apps
+    kind: DaemonSet
+  - group: batch
+    kind: Job
+  - group: batch
+    kind: CronJob
+  - group: autoscaling
+    kind: HorizontalPodAutoscaler
+  - group: autoscaling.k8s.io
+    kind: VerticalPodAutoscaler
+  - group: networking.k8s.io
+    kind: NetworkPolicy
+  - group: networking.k8s.io
+    kind: Ingress
+  - group: argoproj.io
+    kind: Rollout
+  - group: flagger.app
+    kind: Canary
+  roles:
+  - name: admin
+    description: Admin privileges for ThinkRank project
+    policies:
+    - p, proj:thinkrank-project:admin, applications, *, thinkrank-project/*, allow
+    - p, proj:thinkrank-project:admin, repositories, *, *, allow
+    - p, proj:thinkrank-project:admin, certificates, *, *, allow
+    groups:
+    - thinkrank:admin
+  - name: developer
+    description: Developer privileges for ThinkRank project
+    policies:
+    - p, proj:thinkrank-project:developer, applications, get, thinkrank-project/*, allow
+    - p, proj:thinkrank-project:developer, applications, sync, thinkrank-project/*, allow
+    - p, proj:thinkrank-project:developer, repositories, get, *, allow
+    - p, proj:thinkrank-project:developer, logs, get, thinkrank-project/*, allow
+    groups:
+    - thinkrank:developer
+  syncWindows:
+  - kind: allow
+    schedule: '10 1 * * *'
+    duration: 1h
+    applications:
+    - '*-prod'
+  - kind: deny
+    schedule: '0 22 * * Fri'
+    duration: 1h
+    applications:
+    - '*'
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: thinkrank-canary-deployments
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: thinkrank-project
+  source:
+    repoURL: https://github.com/thinkrank/thinkrank-gitops.git
+    targetRevision: HEAD
+    path: canary/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: thinkrank
+  syncPolicy:
+    automated:
+      prune: false  # Don't auto-prune canary deployments
+      selfHeal: false  # Don't auto-heal during canary analysis
+    syncOptions:
+    - Validate=true
+    - RespectIgnoreDifferences=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 10s
+        maxDuration: 30s
+  operation:
+    initiatedBy:
+      automated: true
+    sync:
+      syncStrategy:
+        hook:
+          force: false
+        apply:
+          force: false
+  info:
+  - name: 'Deployment Strategy'
+    value: 'Progressive Canary with Istio Traffic Splitting'
+
+---
+# Repository Credentials for Private GitOps repo
+apiVersion: v1
+kind: Secret
+metadata:
+  name: thinkrank-gitops-repo
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: git
+  url: https://github.com/thinkrank/thinkrank-gitops.git
+  password: ${GITHUB_TOKEN}
+  username: not-used
+
+---
+# Notification Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  service.slack: |
+    token: ${SLACK_TOKEN}
+  service.webhook.github: |
+    url: https://api.github.com
+    headers:
+    - name: Authorization
+      value: token ${GITHUB_TOKEN}
+  template.app-deployed: |
+    message: |
+      {{if eq .serviceType "slack"}}:white_check_mark:{{end}} Application {{.app.metadata.name}} is now running new version.
+  template.app-health-degraded: |
+    message: |
+      {{if eq .serviceType "slack"}}:exclamation:{{end}} Application {{.app.metadata.name}} has degraded.
+  template.app-sync-failed: |
+    message: |
+      {{if eq .serviceType "slack"}}:exclamation:{{end}} Application {{.app.metadata.name}} sync is failed.
+  trigger.on-deployed: |
+    - description: Application is synced and healthy
+      when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+      send:
+      - app-deployed
+  trigger.on-health-degraded: |
+    - description: Application has degraded
+      when: app.status.health.status == 'Degraded'
+      send:
+      - app-health-degraded
+  trigger.on-sync-failed: |
+    - description: Application syncing has failed
+      when: app.status.operationState.phase in ['Error', 'Failed']
+      send:
+      - app-sync-failed
+  subscriptions: |
+    - recipients:
+      - slack:thinkrank-deployments
+      triggers:
+      - on-deployed
+      - on-health-degraded
+      - on-sync-failed
+
+---
+# ArgoCD Image Updater for automated image updates
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: thinkrank-image-updater
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: |
+      auth-service=ghcr.io/thinkrank/thinkrank/auth-service,
+      game-service=ghcr.io/thinkrank/thinkrank/game-service,
+      ai-service=ghcr.io/thinkrank/thinkrank/ai-service,
+      social-service=ghcr.io/thinkrank/thinkrank/social-service,
+      analytics-service=ghcr.io/thinkrank/thinkrank/analytics-service,
+      api-gateway=ghcr.io/thinkrank/thinkrank/api-gateway,
+      frontend=ghcr.io/thinkrank/thinkrank/frontend
+    argocd-image-updater.argoproj.io/write-back-method: git
+    argocd-image-updater.argoproj.io/git-branch: main
+    argocd-image-updater.argoproj.io/update-strategy: latest
+spec:
+  project: thinkrank-project
+  source:
+    repoURL: https://github.com/thinkrank/thinkrank-gitops.git
+    targetRevision: HEAD
+    path: applications/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: thinkrank
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
