@@ -20,7 +20,7 @@
     "test:performance": "jest --config=jest.performance.config.js"
   },
   "dependencies": {
-    "@thinkrank/shared": "workspace:*",
+    "@thinkrank/shared": "file:../../shared",
     "express": "^4.18.2",
     "socket.io": "^4.7.4",
     "socket.io-redis": "^6.1.1",
@@ -41,10 +41,7 @@
     "lodash": "^4.17.21",
     "eventemitter3": "^5.0.1",
     "ws": "^8.14.2",
-    "sticky-session": "^2.0.0",
-    "cluster": "^0.7.7",
-    "prom-client": "^15.1.0",
-    "express-prometheus-middleware": "^1.2.0"
+    "prom-client": "^13.2.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
