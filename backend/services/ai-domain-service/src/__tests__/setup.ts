@@ -8,8 +8,8 @@ import { EventBus } from '../types/domain.types';
 // Global test configuration
 beforeAll(async () => {
   // Setup test environment
-  process.env.NODE_ENV = 'test';
-  process.env.LOG_LEVEL = 'silent';
+  process.env['NODE_ENV'] = 'test';
+  process.env['LOG_LEVEL'] = 'silent';
 });
 
 afterAll(async () => {
