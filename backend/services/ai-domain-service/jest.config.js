@@ -19,7 +19,7 @@ module.exports = {
   restoreMocks: true,
   // Contract testing setup
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   }
 };

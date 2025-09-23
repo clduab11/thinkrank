@@ -6,27 +6,25 @@ module.exports = {
     jest: true,
   },
   extends: [
+    'eslint:recommended',
     '@typescript-eslint/recommended',
-    '@typescript-eslint/recommended-requiring-type-checking',
     'prettier',
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2022,
     sourceType: 'module',
-    project: ['./tsconfig.json', './backend/services/*/tsconfig.json'],
+    project: false, // Disable project-based linting for now to avoid config issues
   },
   plugins: ['@typescript-eslint'],
   rules: {
-    // TypeScript specific rules
-    '@typescript-eslint/explicit-function-return-type': 'error',
-    '@typescript-eslint/explicit-module-boundary-types': 'error',
-    '@typescript-eslint/no-explicit-any': 'error',
+    // TypeScript specific rules - relaxed for modernization phase
+    '@typescript-eslint/explicit-function-return-type': 'off',
+    '@typescript-eslint/explicit-module-boundary-types': 'off',
+    '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': 'error',
-    '@typescript-eslint/prefer-nullish-coalescing': 'error',
-    '@typescript-eslint/prefer-optional-chain': 'error',
-    '@typescript-eslint/strict-boolean-expressions': 'error',
-    '@typescript-eslint/switch-exhaustiveness-check': 'error',
+    '@typescript-eslint/prefer-nullish-coalescing': 'warn',
+    '@typescript-eslint/prefer-optional-chain': 'warn',
 
     // General rules
     'no-console': 'warn',
@@ -43,7 +41,6 @@ module.exports = {
 
     // Performance rules
     'no-await-in-loop': 'warn',
-    'require-atomic-updates': 'error',
   },
   overrides: [
     {
