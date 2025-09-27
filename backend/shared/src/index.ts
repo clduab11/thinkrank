@@ -32,7 +32,6 @@ export type {
 
 // Types - Error handling
 export type {
-  DatabaseError,
   isDatabaseError,
   isJoiValidationError,
   isSupabaseError,
@@ -89,7 +88,7 @@ export const createSuccessResponse = <T>(data: T, meta?: Record<string, unknown>
   }
 });
 
-export const createErrorResponse = (error: AppError | { code: string; message: string; details?: unknown }, meta?: Record<string, unknown>) => ({
+export const createErrorResponse = (error: any, meta?: Record<string, unknown>) => ({
   success: false as const,
   error,
   meta: {

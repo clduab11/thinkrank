@@ -1,0 +1,559 @@
+# Enhanced Feature Flag Management System for ThinkRank Security
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flag-service-config
+  namespace: thinkrank
+data:
+  feature-flag-config.json: |
+    {
+      "version": "2.0.0",
+      "lastUpdated": "2025-09-27T01:03:00Z",
+      "environment": "production",
+      "features": {
+        "security": {
+          "jwtAuthentication": {
+            "enabled": false,
+            "rolloutPercentage": 0,
+            "targetUsers": [],
+            "targetEnvironments": ["staging"],
+            "dependencies": [],
+            "riskLevel": "high",
+            "rollbackPlan": "Revert to session-based auth and notify all users",
+            "monitoring": {
+              "metrics": ["auth_success_rate", "auth_failure_rate", "jwt_token_operations"],
+              "alertThresholds": {
+                "failureRate": 0.05,
+                "latencyP95": 1000
+              }
+            }
+          },
+          "databaseEncryption": {
+            "enabled": true,
+            "rolloutPercentage": 25,
+            "targetUsers": ["premium_users"],
+            "targetEnvironments": ["production", "staging"],
+            "dependencies": ["database_migration_v2"],
+            "riskLevel": "critical",
+            "rollbackPlan": "Decrypt data using backup keys and pause rollout",
+            "monitoring": {
+              "metrics": ["db_query_latency", "encryption_operations", "storage_usage"],
+              "alertThresholds": {
+                "latencyIncrease": 0.2,
+                "errorRate": 0.01
+              }
+            }
+          },
+          "mobileSecurity": {
+            "enabled": true,
+            "rolloutPercentage": 50,
+            "targetUsers": ["mobile_users"],
+            "targetEnvironments": ["production"],
+            "dependencies": ["mobile_app_v3"],
+            "riskLevel": "medium",
+            "rollbackPlan": "Disable enhanced security features in mobile app",
+            "monitoring": {
+              "metrics": ["mobile_auth_success", "biometric_success", "secure_storage_ops"],
+              "alertThresholds": {
+                "authFailureRate": 0.1,
+                "biometricFailureRate": 0.15
+              }
+            }
+          },
+          "serviceMeshSecurity": {
+            "enabled": true,
+            "rolloutPercentage": 75,
+            "targetUsers": ["api_users"],
+            "targetEnvironments": ["production"],
+            "dependencies": ["istio_service_mesh"],
+            "riskLevel": "high",
+            "rollbackPlan": "Disable mTLS and revert to basic TLS",
+            "monitoring": {
+              "metrics": ["mtls_handshake_success", "service_mesh_latency", "security_policy_hits"],
+              "alertThresholds": {
+                "handshakeFailureRate": 0.05,
+                "latencyIncrease": 0.1
+              }
+            }
+          }
+        }
+      },
+      "rolloutStrategies": {
+        "gradual": {
+          "name": "Gradual Rollout",
+          "description": "Incrementally roll out features to percentage of users",
+          "phases": [
+            {"percentage": 5, "duration": "24h", "criteria": "success_rate > 0.99"},
+            {"percentage": 25, "duration": "48h", "criteria": "success_rate > 0.98"},
+            {"percentage": 50, "duration": "72h", "criteria": "success_rate > 0.97"},
+            {"percentage": 100, "duration": "168h", "criteria": "success_rate > 0.95"}
+          ]
+        },
+        "canary": {
+          "name": "Canary Deployment",
+          "description": "Roll out to small group first, then expand",
+          "phases": [
+            {"target": "internal_users", "duration": "12h"},
+            {"target": "beta_testers", "duration": "24h"},
+            {"target": "premium_users", "duration": "48h"},
+            {"target": "all_users", "duration": "168h"}
+          ]
+        },
+        "blueGreen": {
+          "name": "Blue-Green Deployment",
+          "description": "Deploy to parallel environment, then switch traffic",
+          "phases": [
+            {"environment": "green", "validation": "health_checks + security_tests"},
+            {"trafficShift": 10, "duration": "1h"},
+            {"trafficShift": 50, "duration": "2h"},
+            {"trafficShift": 100, "duration": "1h"}
+          ]
+        }
+      }
+    }
+
+  feature-flag-service.sh: |
+    #!/bin/bash
+    # Feature Flag Management Service Script
+
+    FEATURE_CONFIG="/config/feature-flag-config.json"
+    LOG_FILE="/var/log/feature-flag-service.log"
+    HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-60}"
+
+    log() {
+        echo "[$(date -Iseconds)] [$$] $*" | tee -a "$LOG_FILE"
+    }
+
+    get_feature_flag() {
+        local feature="$1"
+        local user_id="${2:-}"
+        local environment="${3:-production}"
+
+        # Check if feature is globally enabled
+        local enabled=$(jq -r ".features.security.${feature}.enabled" "$FEATURE_CONFIG")
+
+        if [ "$enabled" != "true" ]; then
+            echo "false"
+            return 0
+        fi
+
+        # Check rollout percentage
+        local rollout_pct=$(jq -r ".features.security.${feature}.rolloutPercentage" "$FEATURE_CONFIG")
+
+        if [ "$rollout_pct" -lt 100 ]; then
+            # Check if user is in target group
+            local target_users=$(jq -r ".features.security.${feature}.targetUsers[]" "$FEATURE_CONFIG")
+
+            if [ ! -z "$user_id" ] && echo "$target_users" | grep -q "$user_id"; then
+                echo "true"
+                return 0
+            fi
+
+            # Check environment targeting
+            local target_envs=$(jq -r ".features.security.${feature}.targetEnvironments[]" "$FEATURE_CONFIG")
+
+            if echo "$target_envs" | grep -q "$environment"; then
+                # Use consistent hashing for percentage-based rollout
+                local hash=$(echo -n "$user_id:$feature" | sha256sum | cut -c1-8)
+                local hash_decimal=$((16#${hash}))
+                local user_percentage=$((hash_decimal % 100))
+
+                if [ "$user_percentage" -lt "$rollout_pct" ]; then
+                    echo "true"
+                    return 0
+                fi
+            fi
+        else
+            echo "true"
+            return 0
+        fi
+
+        echo "false"
+    }
+
+    set_feature_flag() {
+        local feature="$1"
+        local enabled="$2"
+        local user="${3:-}"
+
+        log "Setting feature flag: $feature = $enabled (user: $user)"
+
+        # Update configuration
+        if [ -n "$user" ]; then
+            # User-specific override
+            jq ".features.security.${feature}.userOverrides.${user} = $enabled" "$FEATURE_CONFIG" > tmp.json && mv tmp.json "$FEATURE_CONFIG"
+        else
+            # Global setting
+            jq ".features.security.${feature}.enabled = $enabled" "$FEATURE_CONFIG" > tmp.json && mv tmp.json "$FEATURE_CONFIG"
+        fi
+
+        # Trigger webhook notifications
+        curl -X POST "${WEBHOOK_URL}/feature-flag-changed" \
+             -H "Content-Type: application/json" \
+             -d "{\"feature\":\"$feature\",\"enabled\":$enabled,\"timestamp\":\"$(date -Iseconds)\"}"
+    }
+
+    health_check() {
+        local feature="$1"
+
+        # Check if feature dependencies are healthy
+        local dependencies=$(jq -r ".features.security.${feature}.dependencies[]" "$FEATURE_CONFIG" 2>/dev/null || echo "")
+
+        for dep in $dependencies; do
+            if ! check_dependency "$dep"; then
+                log "Dependency check failed for $feature: $dep"
+                return 1
+            fi
+        done
+
+        # Check feature-specific metrics
+        local metrics=$(jq -r ".features.security.${feature}.monitoring.metrics[]" "$FEATURE_CONFIG" 2>/dev/null || echo "")
+
+        for metric in $metrics; do
+            if ! check_metric_threshold "$metric" "$feature"; then
+                log "Metric threshold exceeded for $feature: $metric"
+                return 1
+            fi
+        done
+
+        return 0
+    }
+
+    check_dependency() {
+        local dependency="$1"
+
+        # Check if dependency service is healthy
+        kubectl -n thinkrank get pods -l app="$dependency" -o jsonpath='{.items[0].status.phase}' | grep -q "Running"
+    }
+
+    check_metric_threshold() {
+        local metric="$1"
+        local feature="$2"
+
+        # Get threshold values from config
+        local threshold=$(jq -r ".features.security.${feature}.monitoring.alertThresholds.${metric}" "$FEATURE_CONFIG" 2>/dev/null || echo "")
+
+        if [ -n "$threshold" ]; then
+            # Query Prometheus for current metric value
+            local current_value=$(curl -s "${PROMETHEUS_URL}/api/v1/query" \
+                                 --data-urlencode "query=${metric}" | \
+                                 jq -r '.data.result[0].value[1]' 2>/dev/null || echo "0")
+
+            # Compare with threshold (simplified comparison)
+            awk "BEGIN {exit !($current_value <= $threshold)}"
+        fi
+    }
+
+    rollback_feature() {
+        local feature="$1"
+        local reason="$2"
+
+        log "Rolling back feature $feature: $reason"
+
+        # Disable feature
+        set_feature_flag "$feature" "false"
+
+        # Execute feature-specific rollback plan
+        local rollback_plan=$(jq -r ".features.security.${feature}.rollbackPlan" "$FEATURE_CONFIG")
+
+        log "Executing rollback plan: $rollback_plan"
+
+        # Trigger alerts
+        curl -X POST "${ALERT_WEBHOOK_URL}" \
+             -H "Content-Type: application/json" \
+             -d "{\"alert\":\"FeatureRollback\",\"feature\":\"$feature\",\"reason\":\"$reason\",\"timestamp\":\"$(date -Iseconds)\"}"
+    }
+
+    # Main service loop
+    main() {
+        log "Starting Feature Flag Service"
+
+        while true; do
+            # Health check all features
+            for feature in jwtAuthentication databaseEncryption mobileSecurity serviceMeshSecurity; do
+                if ! health_check "$feature"; then
+                    rollback_feature "$feature" "Health check failed"
+                fi
+            done
+
+            sleep "$HEALTH_CHECK_INTERVAL"
+        done
+    }
+
+    case "${1:-}" in
+        "get")
+            feature="$2"
+            user_id="$3"
+            environment="$4"
+            get_feature_flag "$feature" "$user_id" "$environment"
+            ;;
+        "set")
+            feature="$2"
+            enabled="$3"
+            user="$4"
+            set_feature_flag "$feature" "$enabled" "$user"
+            ;;
+        "health")
+            feature="$2"
+            if health_check "$feature"; then
+                echo "healthy"
+                exit 0
+            else
+                echo "unhealthy"
+                exit 1
+            fi
+            ;;
+        "rollback")
+            feature="$2"
+            reason="$3"
+            rollback_feature "$feature" "$reason"
+            ;;
+        "daemon")
+            main
+            ;;
+        *)
+            echo "Usage: $0 {get|set|health|rollback|daemon} [args...]"
+            exit 1
+            ;;
+    esac
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feature-flag-service
+  namespace: thinkrank
+  labels:
+    app: feature-flag-service
+    component: security-management
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: feature-flag-service
+  template:
+    metadata:
+      labels:
+        app: feature-flag-service
+        component: security-management
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+      - name: feature-flag-service
+        image: thinkrank/feature-flag-service:v2.0.0
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: CONFIG_PATH
+          value: "/config/feature-flag-config.json"
+        - name: PROMETHEUS_URL
+          value: "http://prometheus.monitoring.svc.cluster.local:9090"
+        - name: WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: feature-flag-webhooks
+              key: WEBHOOK_URL
+        - name: ALERT_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: feature-flag-webhooks
+              key: ALERT_WEBHOOK_URL
+        - name: HEALTH_CHECK_INTERVAL
+          value: "60"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
+          readOnly: true
+        - name: logs-volume
+          mountPath: /var/log
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health/startup
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: config-volume
+        configMap:
+          name: feature-flag-service-config
+      - name: logs-volume
+        emptyDir:
+          sizeLimit: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feature-flag-service
+  namespace: thinkrank
+  labels:
+    app: feature-flag-service
+spec:
+  selector:
+    app: feature-flag-service
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+---
+# Service Monitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: feature-flag-service-monitor
+  namespace: thinkrank
+  labels:
+    app: feature-flag-service
+spec:
+  selector:
+    matchLabels:
+      app: feature-flag-service
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+---
+# Enhanced Prometheus Rules for Feature Flag Management
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: feature-flag-alerts
+  namespace: thinkrank
+spec:
+  groups:
+  - name: feature_flag_alerts
+    rules:
+    - alert: FeatureFlagServiceDown
+      expr: up{job="feature-flag-service"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Feature Flag Service is down"
+        description: "Feature Flag Service has been down for more than 2 minutes"
+
+    - alert: FeatureFlagHealthCheckFailed
+      expr: increase(feature_flag_health_check_failures_total[5m]) > 0
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Feature flag health check failed"
+        description: "Feature '{{ $labels.feature }}' failed health check"
+
+    - alert: FeatureFlagRolloutDegraded
+      expr: feature_flag_rollout_success_rate < 0.95
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Feature flag rollout degraded"
+        description: "Feature '{{ $labels.feature }}' rollout success rate below 95%"
+
+    - alert: FeatureFlagEmergencyRollback
+      expr: increase(feature_flag_emergency_rollbacks_total[2m]) > 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Emergency feature flag rollback triggered"
+        description: "Feature '{{ $labels.feature }}' was rolled back due to '{{ $labels.reason }}'"
+---
+# Network Policy for Feature Flag Service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: feature-flag-service-policy
+  namespace: thinkrank
+spec:
+  podSelector:
+    matchLabels:
+      app: feature-flag-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: thinkrank
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    - podSelector:
+        matchLabels:
+          app: auth-service
+    ports:
+    - protocol: TCP
+      port: 8080
+  - from: []  # Deny all other ingress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 9090
+  - to: []  # Deny all other egress

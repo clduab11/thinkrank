@@ -42,6 +42,13 @@ namespace ThinkRank.Performance
         private const long memoryWarningThreshold = 1024L * 1024L * 1024L; // 1GB
         private const long memoryCriticalThreshold = 1536L * 1024L * 1024L; // 1.5GB
 
+        // Bottleneck detection
+        private Queue<FrameAnalysis> frameAnalysisQueue = new Queue<FrameAnalysis>();
+        private const int bottleneckAnalysisFrames = 300; // 5 seconds at 60fps
+        private BottleneckAnalysis currentBottleneckAnalysis;
+        private float lastBottleneckCheck;
+        private const float bottleneckCheckInterval = 5f;
+
         // Events
         public static event Action<PerformanceData> OnPerformanceUpdate;
         public static event Action<PerformanceWarning> OnPerformanceWarning;
@@ -98,6 +105,9 @@ namespace ThinkRank.Performance
                 // Calculate frame time and FPS
                 float frameTime = Time.unscaledDeltaTime;
                 UpdateFrameRateMetrics(frameTime);
+
+                // Analyze frame for bottleneck detection
+                AnalyzeFrameBottlenecks(frameTime);
 
                 // Check for performance issues
                 CheckPerformanceThresholds(frameTime);
@@ -557,6 +567,274 @@ namespace ThinkRank.Performance
 
         #endregion
 
+        #region Bottleneck Detection
+
+        /// <summary>
+        /// Analyze frame for performance bottlenecks
+        /// </summary>
+        private void AnalyzeFrameBottlenecks(float frameTime)
+        {
+            var frameAnalysis = new FrameAnalysis
+            {
+                frameTime = frameTime,
+                timestamp = Time.unscaledTime,
+                cpuUsage = GetCPUUsage(),
+                gpuUsage = GetGPUUsage(),
+                memoryPressure = GetMemoryPressure(),
+                drawCalls = UnityEngine.Profiling.Profiler.GetDrawCalls(),
+                triangles = UnityEngine.Profiling.Profiler.GetTriangles(),
+                vertices = UnityEngine.Profiling.Profiler.GetVertices()
+            };
+
+            // Add to analysis queue
+            frameAnalysisQueue.Enqueue(frameAnalysis);
+
+            // Maintain queue size
+            if (frameAnalysisQueue.Count > bottleneckAnalysisFrames)
+            {
+                frameAnalysisQueue.Dequeue();
+            }
+
+            // Check for bottleneck analysis update
+            if (Time.unscaledTime - lastBottleneckCheck > bottleneckCheckInterval)
+            {
+                UpdateBottleneckAnalysis();
+                lastBottleneckCheck = Time.unscaledTime;
+            }
+        }
+
+        /// <summary>
+        /// Update comprehensive bottleneck analysis
+        /// </summary>
+        private void UpdateBottleneckAnalysis()
+        {
+            if (frameAnalysisQueue.Count < 30) return; // Need at least 30 frames
+
+            currentBottleneckAnalysis = new BottleneckAnalysis
+            {
+                analysisPeriod = bottleneckCheckInterval,
+                totalFrames = frameAnalysisQueue.Count,
+                averageFrameTime = CalculateAverageFrameTime(),
+                frameTimeVariance = CalculateFrameTimeVariance(),
+                bottleneckType = IdentifyPrimaryBottleneck(),
+                bottleneckSeverity = CalculateBottleneckSeverity(),
+                recommendations = GenerateOptimizationRecommendations(),
+                timestamp = DateTime.UtcNow
+            };
+
+            // Trigger bottleneck alert if severe
+            if (currentBottleneckAnalysis.bottleneckSeverity >= BottleneckSeverity.High)
+            {
+                TriggerBottleneckAlert();
+            }
+        }
+
+        /// <summary>
+        /// Calculate average frame time from analysis queue
+        /// </summary>
+        private float CalculateAverageFrameTime()
+        {
+            float total = 0f;
+            foreach (var analysis in frameAnalysisQueue)
+            {
+                total += analysis.frameTime;
+            }
+            return total / frameAnalysisQueue.Count;
+        }
+
+        /// <summary>
+        /// Calculate frame time variance
+        /// </summary>
+        private float CalculateFrameTimeVariance()
+        {
+            float mean = CalculateAverageFrameTime();
+            float variance = 0f;
+
+            foreach (var analysis in frameAnalysisQueue)
+            {
+                variance += Mathf.Pow(analysis.frameTime - mean, 2);
+            }
+            variance /= frameAnalysisQueue.Count;
+
+            return variance;
+        }
+
+        /// <summary>
+        /// Identify the primary performance bottleneck
+        /// </summary>
+        private BottleneckType IdentifyPrimaryBottleneck()
+        {
+            float avgFrameTime = CalculateAverageFrameTime();
+            float avgCPU = CalculateAverageCPUUsage();
+            float avgGPU = CalculateAverageGPUUsage();
+            float avgMemory = CalculateAverageMemoryPressure();
+
+            // Simple heuristic for bottleneck identification
+            if (avgFrameTime > targetFrameTime * 1.5f)
+            {
+                if (avgCPU > 80f) return BottleneckType.CPU;
+                if (avgGPU > 85f) return BottleneckType.GPU;
+                if (avgMemory > 0.8f) return BottleneckType.Memory;
+                if (GetAverageDrawCalls() > 500) return BottleneckType.DrawCalls;
+                if (GetAverageTriangles() > 100000) return BottleneckType.Geometry;
+            }
+
+            return BottleneckType.None;
+        }
+
+        /// <summary>
+        /// Calculate bottleneck severity
+        /// </summary>
+        private BottleneckSeverity CalculateBottleneckSeverity()
+        {
+            float avgFrameTime = CalculateAverageFrameTime();
+            float variance = currentBottleneckAnalysis?.frameTimeVariance ?? 0f;
+
+            if (avgFrameTime > targetFrameTime * 2f || variance > 0.001f)
+                return BottleneckSeverity.Critical;
+            else if (avgFrameTime > targetFrameTime * 1.5f)
+                return BottleneckSeverity.High;
+            else if (avgFrameTime > targetFrameTime * 1.2f)
+                return BottleneckSeverity.Medium;
+            else
+                return BottleneckSeverity.Low;
+        }
+
+        /// <summary>
+        /// Generate optimization recommendations
+        /// </summary>
+        private List<string> GenerateOptimizationRecommendations()
+        {
+            var recommendations = new List<string>();
+            var bottleneck = IdentifyPrimaryBottleneck();
+
+            switch (bottleneck)
+            {
+                case BottleneckType.CPU:
+                    recommendations.Add("Reduce script execution time");
+                    recommendations.Add("Optimize physics calculations");
+                    recommendations.Add("Consider object pooling");
+                    break;
+
+                case BottleneckType.GPU:
+                    recommendations.Add("Reduce shader complexity");
+                    recommendations.Add("Optimize texture sizes");
+                    recommendations.Add("Use texture atlasing");
+                    break;
+
+                case BottleneckType.Memory:
+                    recommendations.Add("Implement object pooling");
+                    recommendations.Add("Reduce texture memory usage");
+                    recommendations.Add("Unload unused assets");
+                    break;
+
+                case BottleneckType.DrawCalls:
+                    recommendations.Add("Use batching techniques");
+                    recommendations.Add("Combine meshes");
+                    recommendations.Add("Reduce material count");
+                    break;
+
+                case BottleneckType.Geometry:
+                    recommendations.Add("Optimize mesh complexity");
+                    recommendations.Add("Use LOD systems");
+                    recommendations.Add("Reduce polygon count");
+                    break;
+            }
+
+            return recommendations;
+        }
+
+        /// <summary>
+        /// Trigger bottleneck alert
+        /// </summary>
+        private void TriggerBottleneckAlert()
+        {
+            if (currentBottleneckAnalysis == null) return;
+
+            OnPerformanceWarning?.Invoke(new PerformanceWarning
+            {
+                type = PerformanceWarningType.SystemOverload,
+                message = $"Performance bottleneck detected: {currentBottleneckAnalysis.bottleneckType} ({currentBottleneckAnalysis.bottleneckSeverity})",
+                severity = currentBottleneckAnalysis.bottleneckSeverity >= BottleneckSeverity.Critical ?
+                    WarningLevel.Critical : WarningLevel.Warning,
+                timestamp = DateTime.UtcNow
+            });
+        }
+
+        /// <summary>
+        /// Get current bottleneck analysis
+        /// </summary>
+        public BottleneckAnalysis GetCurrentBottleneckAnalysis()
+        {
+            return currentBottleneckAnalysis;
+        }
+
+        // Helper methods for bottleneck analysis
+        private float GetCPUUsage() => UnityEngine.Profiling.Profiler.GetTotalAllocatedMemory(false) > 0 ?
+            Mathf.Clamp01(UnityEngine.Profiling.Profiler.GetMonoUsedSize() / (float)UnityEngine.Profiling.Profiler.GetMonoHeapSize()) : 0f;
+
+        private float GetGPUUsage() => 0.5f; // Placeholder - would need platform-specific GPU monitoring
+
+        private float GetMemoryPressure() => currentMemoryUsage / (float)memoryCriticalThreshold;
+
+        private float CalculateAverageCPUUsage()
+        {
+            float total = 0f;
+            int count = 0;
+            foreach (var analysis in frameAnalysisQueue)
+            {
+                total += analysis.cpuUsage;
+                count++;
+            }
+            return count > 0 ? total / count : 0f;
+        }
+
+        private float CalculateAverageGPUUsage()
+        {
+            float total = 0f;
+            int count = 0;
+            foreach (var analysis in frameAnalysisQueue)
+            {
+                total += analysis.gpuUsage;
+                count++;
+            }
+            return count > 0 ? total / count : 0f;
+        }
+
+        private float CalculateAverageMemoryPressure()
+        {
+            float total = 0f;
+            int count = 0;
+            foreach (var analysis in frameAnalysisQueue)
+            {
+                total += analysis.memoryPressure;
+                count++;
+            }
+            return count > 0 ? total / count : 0f;
+        }
+
+        private int GetAverageDrawCalls()
+        {
+            int total = 0;
+            foreach (var analysis in frameAnalysisQueue)
+            {
+                total += analysis.drawCalls;
+            }
+            return total / frameAnalysisQueue.Count;
+        }
+
+        private int GetAverageTriangles()
+        {
+            int total = 0;
+            foreach (var analysis in frameAnalysisQueue)
+            {
+                total += analysis.triangles;
+            }
+            return total / frameAnalysisQueue.Count;
+        }
+
+        #endregion
+
         #region Public API
 
         /// <summary>
@@ -587,6 +865,68 @@ namespace ThinkRank.Performance
 
         #endregion
     }
+
+    #region Bottleneck Analysis Data Structures
+
+    /// <summary>
+    /// Individual frame analysis for bottleneck detection
+    /// </summary>
+    [System.Serializable]
+    public class FrameAnalysis
+    {
+        public float frameTime;
+        public float timestamp;
+        public float cpuUsage;
+        public float gpuUsage;
+        public float memoryPressure;
+        public int drawCalls;
+        public int triangles;
+        public int vertices;
+    }
+
+    /// <summary>
+    /// Comprehensive bottleneck analysis results
+    /// </summary>
+    [System.Serializable]
+    public class BottleneckAnalysis
+    {
+        public float analysisPeriod;
+        public int totalFrames;
+        public float averageFrameTime;
+        public float frameTimeVariance;
+        public BottleneckType bottleneckType;
+        public BottleneckSeverity bottleneckSeverity;
+        public List<string> recommendations;
+        public DateTime timestamp;
+    }
+
+    /// <summary>
+    /// Types of performance bottlenecks
+    /// </summary>
+    public enum BottleneckType
+    {
+        None,
+        CPU,
+        GPU,
+        Memory,
+        DrawCalls,
+        Geometry,
+        Network,
+        Physics
+    }
+
+    /// <summary>
+    /// Severity levels for bottleneck analysis
+    /// </summary>
+    public enum BottleneckSeverity
+    {
+        Low,
+        Medium,
+        High,
+        Critical
+    }
+
+    #endregion
 
     #region Data Structures
 

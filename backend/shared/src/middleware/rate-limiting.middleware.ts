@@ -1,9 +1,9 @@
 // Global Rate Limiting Middleware with Redis and DDoS Protection
 import { Request, Response, NextFunction } from 'express';
 import Redis from 'ioredis';
-import { getLogger } from '../utils/logger';
+import { Logger } from '../utils/logger';
 
-const logger = getLogger('RateLimiter');
+const logger = new Logger({ name: 'RateLimiter' });
 
 // Rate limiting configuration
 interface RateLimitConfig {
@@ -23,10 +23,7 @@ export class AdvancedRateLimiter {
   private abuseDetection: AbuseDetectionSystem;
 
   constructor(redisUrl: string) {
-    this.redis = new Redis(redisUrl, {
-      retryDelayOnFailover: 100,
-      maxRetriesPerRequest: 3
-    });
+    this.redis = new Redis(redisUrl);
     this.abuseDetection = new AbuseDetectionSystem(this.redis);
     this.setupDefaultConfigs();
   }
@@ -73,7 +70,7 @@ export class AdvancedRateLimiter {
   }
 
   public createMiddleware(configName: string = 'global') {
-    return async (req: Request, res: Response, next: NextFunction) => {
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const config = this.configs.get(configName);
         if (!config) {
@@ -107,7 +104,7 @@ export class AdvancedRateLimiter {
           throw new Error('Redis pipeline execution failed');
         }
 
-        const requestCount = results[1][1] as number;
+        const requestCount = (results[1][1] as number) || 0;
 
         // Check if rate limit exceeded
         if (requestCount >= config.maxRequests) {

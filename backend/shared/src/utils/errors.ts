@@ -168,7 +168,7 @@ export class ErrorFormatter {
       error: {
         code: error.code,
         message: error.message,
-        details: error.details
+        ...(error.details !== undefined && { details: error.details })
       },
       meta: {
         timestamp: new Date().toISOString(),
@@ -252,7 +252,7 @@ export class ErrorHandler {
       details: error.details
     };
 
-    if (includeStack && process.env.NODE_ENV === 'development') {
+    if (includeStack && process.env['NODE_ENV'] === 'development') {
       sanitized.stack = error.stack;
     }
 

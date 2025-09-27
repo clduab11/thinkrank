@@ -1,0 +1,155 @@
+# Unity Performance Monitoring Alerts for 60fps Target
+# These alerts complement the existing infrastructure monitoring
+
+groups:
+  - name: unity_performance_alerts
+    interval: 15s
+    rules:
+      # Frame Rate Monitoring
+      - alert: UnityFrameRateBelowTarget
+        expr: unity_fps_average < 54
+        for: 2m
+        labels:
+          severity: warning
+          service: unity-client
+        annotations:
+          summary: "Unity frame rate below 60fps target"
+          description: "Average FPS {{ $value }} is below 90% of 60fps target for mobile devices."
+
+      - alert: UnityFrameRateCritical
+        expr: unity_fps_average < 30
+        for: 1m
+        labels:
+          severity: critical
+          service: unity-client
+        annotations:
+          summary: "Critical frame rate drop detected"
+          description: "Average FPS {{ $value }} is critically low, indicating severe performance issues."
+
+      # Memory Usage Monitoring
+      - alert: UnityMemoryUsageHigh
+        expr: unity_memory_usage_mb > 1500
+        for: 3m
+        labels:
+          severity: warning
+          service: unity-client
+        annotations:
+          summary: "High Unity memory usage detected"
+          description: "Unity application using {{ $value }}MB memory, approaching critical threshold."
+
+      - alert: UnityMemoryUsageCritical
+        expr: unity_memory_usage_mb > 2048
+        for: 1m
+        labels:
+          severity: critical
+          service: unity-client
+        annotations:
+          summary: "Critical Unity memory usage"
+          description: "Unity memory usage {{ $value }}MB exceeds critical threshold. Risk of crashes."
+
+      # Performance Degradation
+      - alert: UnityDroppedFramesHigh
+        expr: increase(unity_dropped_frames_total[5m]) > 300
+        for: 2m
+        labels:
+          severity: warning
+          service: unity-client
+        annotations:
+          summary: "High number of dropped frames"
+          description: "{{ $value }} frames dropped in last 5 minutes, indicating performance issues."
+
+      # Mobile Device Specific
+      - alert: MobileDeviceOverheating
+        expr: mobile_device_temperature_celsius > 70
+        for: 2m
+        labels:
+          severity: warning
+          service: mobile-device
+        annotations:
+          summary: "Mobile device overheating detected"
+          description: "Device temperature {{ $value }}°C exceeds safe operating threshold."
+
+      - alert: MobileBatteryLowPerformance
+        expr: mobile_battery_level_percent < 20
+        for: 5m
+        labels:
+          severity: info
+          service: mobile-device
+        annotations:
+          summary: "Low battery affecting performance"
+          description: "Device battery at {{ $value }}%, may impact performance optimization."
+
+      # Network Latency for Real-time Gaming
+      - alert: MobileNetworkLatencyHigh
+        expr: mobile_network_latency_ms > 200
+        for: 3m
+        labels:
+          severity: warning
+          service: network
+        annotations:
+          summary: "High mobile network latency"
+          description: "Network latency {{ $value }}ms exceeds threshold for real-time gaming."
+
+      # Game State Synchronization
+      - alert: GameStateSyncLatencyHigh
+        expr: game_state_sync_latency_ms > 100
+        for: 2m
+        labels:
+          severity: warning
+          service: game-sync
+        annotations:
+          summary: "High game state synchronization latency"
+          description: "Game state sync taking {{ $value }}ms, affecting multiplayer experience."
+
+      - alert: GameStateSyncFailureRate
+        expr: rate(game_state_sync_failures_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+          service: game-sync
+        annotations:
+          summary: "High game state sync failure rate"
+          description: "Game state sync failure rate {{ $value }} exceeds 5% threshold."
+
+      # Performance Bottleneck Detection
+      - alert: RenderThreadBlocked
+        expr: unity_render_thread_blocked_seconds > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: unity-client
+        annotations:
+          summary: "Render thread blocked frequently"
+          description: "Render thread blocked for {{ $value }}s, indicating rendering bottlenecks."
+
+      - alert: GarbageCollectionFrequent
+        expr: increase(unity_gc_collections_total[5m]) > 50
+        for: 3m
+        labels:
+          severity: warning
+          service: unity-client
+        annotations:
+          summary: "Frequent garbage collection"
+          description: "{{ $value }} GC collections in 5 minutes, indicating memory pressure."
+
+      # Quality Adaptation
+      - alert: QualityReductionTriggered
+        expr: unity_quality_level < 2
+        for: 5m
+        labels:
+          severity: info
+          service: unity-client
+        annotations:
+          summary: "Automatic quality reduction activated"
+          description: "Game quality reduced to level {{ $value }} due to performance constraints."
+
+      # Performance Trend Analysis
+      - alert: PerformanceDegradationTrend
+        expr: predict_linear(unity_fps_average[30m], 3600) < 45
+        for: 10m
+        labels:
+          severity: warning
+          service: unity-client
+        annotations:
+          summary: "Performance trending downward"
+          description: "FPS predicted to drop below 45 in next hour based on trend analysis."

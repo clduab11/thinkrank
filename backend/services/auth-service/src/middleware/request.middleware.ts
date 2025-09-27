@@ -2,6 +2,7 @@
 import { Logger } from '@thinkrank/shared';
 import { NextFunction, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { TokenManagementService, TokenPayload } from '../services/token-management.service';
 
 // Extend Express Request interface
 declare global {
@@ -10,6 +11,11 @@ declare global {
       requestId: string;
       startTime: number;
       logger: Logger;
+      user?: {
+        userId: string;
+        email: string;
+        role: 'user' | 'admin' | 'moderator';
+      };
     }
   }
 }
@@ -81,14 +87,23 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // TODO: Verify JWT token with Supabase
-    // For now, just validate format
-    if (!token || token.length < 10) {
+    // Initialize token management service with environment-based RSA keys
+    const tokenService = new TokenManagementService();
+
+    // Verify JWT token with RSA256 signature validation
+    let decodedToken: TokenPayload;
+    try {
+      decodedToken = await tokenService.verifyToken(token);
+    } catch (error) {
+      req.logger.warn('JWT token verification failed', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
       return res.status(401).json({
         success: false,
         error: {
           code: 'INVALID_TOKEN',
-          message: 'Invalid authentication token'
+          message: 'Invalid or expired authentication token'
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -98,8 +113,17 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       });
     }
 
-    // TODO: Add user information to request object
-    // req.user = decodedToken.user;
+    // Extract user information from verified token and add to request object
+    req.user = {
+      userId: decodedToken.userId,
+      email: decodedToken.email,
+      role: decodedToken.role || 'user'
+    };
+
+    req.logger.info('Authentication successful', {
+      user_id: req.user.userId,
+      role: req.user.role
+    });
 
     next();
   } catch (error) {

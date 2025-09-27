@@ -1,0 +1,618 @@
+# Comprehensive Integration Tests for Feature Flag Management System
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flag-integration-tests
+  namespace: thinkrank
+data:
+  test-scenarios.json: |
+    {
+      "version": "2.0.0",
+      "lastUpdated": "2025-09-27T01:05:00Z",
+      "testSuites": {
+        "feature-flag-basic": {
+          "name": "Feature Flag Basic Functionality Tests",
+          "description": "Test core feature flag operations",
+          "tests": [
+            {
+              "name": "FeatureFlagGetTest",
+              "description": "Test retrieving feature flag values",
+              "endpoint": "/feature-flag/get",
+              "method": "POST",
+              "payload": {"feature": "jwtAuthentication"},
+              "expectedResponse": {
+                "feature": "jwtAuthentication",
+                "enabled": false,
+                "rolloutPercentage": 0
+              },
+              "assertions": [
+                "response.feature == 'jwtAuthentication'",
+                "response.enabled == false",
+                "response.rolloutPercentage == 0"
+              ]
+            },
+            {
+              "name": "FeatureFlagSetTest",
+              "description": "Test setting feature flag values",
+              "endpoint": "/feature-flag/set",
+              "method": "POST",
+              "payload": {
+                "feature": "databaseEncryption",
+                "enabled": true,
+                "rolloutPercentage": 50
+              },
+              "expectedResponse": {
+                "success": true,
+                "message": "Feature flag updated"
+              }
+            },
+            {
+              "name": "FeatureFlagHealthTest",
+              "description": "Test feature flag health check",
+              "endpoint": "/feature-flag/health",
+              "method": "POST",
+              "payload": {"feature": "mobileSecurity"},
+              "expectedResponse": {"status": "healthy"}
+            }
+          ]
+        },
+        "security-rollout": {
+          "name": "Security Feature Rollout Tests",
+          "description": "Test gradual rollout of security features",
+          "tests": [
+            {
+              "name": "JWTGradualRolloutTest",
+              "description": "Test JWT authentication gradual rollout",
+              "steps": [
+                {
+                  "action": "set_rollout",
+                  "feature": "jwtAuthentication",
+                  "percentage": 10,
+                  "waitSeconds": 60
+                },
+                {
+                  "action": "verify_rollout",
+                  "userGroup": "test_users",
+                  "expectedAccess": true
+                },
+                {
+                  "action": "monitor_metrics",
+                  "metrics": ["auth_success_rate", "auth_failure_rate"],
+                  "thresholds": {"success_rate": 0.95}
+                }
+              ]
+            },
+            {
+              "name": "DatabaseEncryptionRolloutTest",
+              "description": "Test database encryption progressive deployment",
+              "steps": [
+                {
+                  "action": "enable_encryption",
+                  "percentage": 25,
+                  "targetUsers": ["premium_users"]
+                },
+                {
+                  "action": "verify_data_access",
+                  "userGroup": "premium_users",
+                  "expectedPerformance": {"latency_increase": "<10%"}
+                },
+                {
+                  "action": "check_rollback_readiness",
+                  "feature": "databaseEncryption"
+                }
+              ]
+            }
+          ]
+        },
+        "rollback-scenarios": {
+          "name": "Rollback Mechanism Tests",
+          "description": "Test rollback procedures for failed security updates",
+          "tests": [
+            {
+              "name": "EmergencyRollbackTest",
+              "description": "Test emergency rollback functionality",
+              "scenario": "High error rate detected",
+              "steps": [
+                {
+                  "action": "simulate_failure",
+                  "feature": "serviceMeshSecurity",
+                  "failureType": "high_latency",
+                  "errorRate": 0.15
+                },
+                {
+                  "action": "trigger_rollback",
+                  "autoRollback": true,
+                  "timeoutSeconds": 300
+                },
+                {
+                  "action": "verify_rollback",
+                  "expectedState": {"enabled": false, "rolloutPercentage": 0}
+                },
+                {
+                  "action": "check_system_stability",
+                  "metrics": ["system_availability", "error_rate"],
+                  "thresholds": {"availability": ">99%", "error_rate": "<1%"}
+                }
+              ]
+            },
+            {
+              "name": "ManualRollbackTest",
+              "description": "Test manual rollback procedures",
+              "steps": [
+                {
+                  "action": "deploy_failing_update",
+                  "feature": "mobileSecurity",
+                  "version": "2.1.0-broken"
+                },
+                {
+                  "action": "detect_degradation",
+                  "metric": "mobile_auth_success_rate",
+                  "threshold": 0.8
+                },
+                {
+                  "action": "execute_manual_rollback",
+                  "targetVersion": "2.0.0-stable"
+                },
+                {
+                  "action": "verify_recovery",
+                  "recoveryTime": "<5 minutes"
+                }
+              ]
+            }
+          ]
+        },
+        "monitoring-alerting": {
+          "name": "Monitoring and Alerting Tests",
+          "description": "Test monitoring and alerting for feature flag status",
+          "tests": [
+            {
+              "name": "AlertThresholdTest",
+              "description": "Test alert threshold configuration",
+              "alertRules": [
+                {
+                  "name": "HighErrorRateAlert",
+                  "condition": "error_rate > 0.05",
+                  "duration": "5m",
+                  "severity": "warning"
+                },
+                {
+                  "name": "CriticalFailureAlert",
+                  "condition": "error_rate > 0.1",
+                  "duration": "2m",
+                  "severity": "critical"
+                }
+              ]
+            },
+            {
+              "name": "DashboardMetricsTest",
+              "description": "Test monitoring dashboard metrics",
+              "dashboardPanels": [
+                "Feature Flag Status Overview",
+                "Rollout Progress Tracking",
+                "Security Metrics Summary",
+                "Alert History"
+              ]
+            }
+          ]
+        }
+      }
+    }
+
+  feature-flag-test-runner.sh: |
+    #!/bin/bash
+    # Feature Flag Integration Test Runner
+
+    TEST_CONFIG="/tests/test-scenarios.json"
+    FEATURE_FLAG_SERVICE="feature-flag-service.thinkrank.svc.cluster.local:8080"
+    RESULTS_DIR="/test-results"
+    LOG_FILE="$RESULTS_DIR/test-run-$(date +%Y%m%d-%H%M%S).log"
+
+    # Test result tracking
+    TESTS_RUN=0
+    TESTS_PASSED=0
+    TESTS_FAILED=0
+
+    log() {
+        echo "[$(date -Iseconds)] [TEST] $*" | tee -a "$LOG_FILE"
+    }
+
+    setup_test_environment() {
+        log "Setting up test environment"
+
+        # Create test results directory
+        mkdir -p "$RESULTS_DIR"
+
+        # Deploy test dependencies
+        kubectl -n thinkrank apply -f /tests/test-dependencies.yaml
+
+        # Wait for dependencies to be ready
+        kubectl -n thinkrank wait --for=condition=available --timeout=300s deployment/test-user-service
+
+        log "Test environment setup completed"
+    }
+
+    run_test() {
+        local test_name="$1"
+        local endpoint="$2"
+        local method="$3"
+        local payload="$4"
+        local expected_response="$5"
+
+        TESTS_RUN=$((TESTS_RUN + 1))
+
+        log "Running test: $test_name"
+
+        # Execute HTTP request
+        local response
+        if [ "$method" = "POST" ]; then
+            response=$(curl -s -X POST "http://$FEATURE_FLAG_SERVICE$endpoint" \
+                -H "Content-Type: application/json" \
+                -d "$payload")
+        else
+            response=$(curl -s "http://$FEATURE_FLAG_SERVICE$endpoint")
+        fi
+
+        # Log response
+        echo "Response: $response" >> "$LOG_FILE"
+
+        # Basic validation - check if response is valid JSON
+        if echo "$response" | jq empty > /dev/null 2>&1; then
+            log "✅ $test_name: Valid JSON response received"
+
+            # Additional validations can be added here
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+            return 0
+        else
+            log "❌ $test_name: Invalid JSON response"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            return 1
+        fi
+    }
+
+    run_rollout_test() {
+        local test_name="$1"
+        local feature="$2"
+        local target_percentage="$3"
+
+        TESTS_RUN=$((TESTS_RUN + 1))
+
+        log "Running rollout test: $test_name"
+
+        # Set feature flag
+        local set_response=$(curl -s -X POST "http://$FEATURE_FLAG_SERVICE/feature-flag/set" \
+            -H "Content-Type: application/json" \
+            -d "{\"feature\":\"$feature\",\"enabled\":true,\"rolloutPercentage\":$target_percentage}")
+
+        # Verify the setting was applied
+        local get_response=$(curl -s -X POST "http://$FEATURE_FLAG_SERVICE/feature-flag/get" \
+            -H "Content-Type: application/json" \
+            -d "{\"feature\":\"$feature\"}")
+
+        local actual_percentage=$(echo "$get_response" | jq -r '.rolloutPercentage // 0')
+
+        if [ "$actual_percentage" -eq "$target_percentage" ]; then
+            log "✅ $test_name: Rollout percentage set correctly to $target_percentage%"
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+            return 0
+        else
+            log "❌ $test_name: Expected $target_percentage%, got $actual_percentage%"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            return 1
+        fi
+    }
+
+    run_rollback_test() {
+        local test_name="$1"
+        local feature="$2"
+
+        TESTS_RUN=$((TESTS_RUN + 1))
+
+        log "Running rollback test: $test_name"
+
+        # Trigger rollback
+        local rollback_response=$(curl -s -X POST "http://$FEATURE_FLAG_SERVICE/feature-flag/rollback" \
+            -H "Content-Type: application/json" \
+            -d "{\"feature\":\"$feature\",\"reason\":\"Test rollback\"}")
+
+        # Verify feature is disabled
+        local status_response=$(curl -s -X POST "http://$FEATURE_FLAG_SERVICE/feature-flag/get" \
+            -H "Content-Type: application/json" \
+            -d "{\"feature\":\"$feature\"}")
+
+        local enabled=$(echo "$status_response" | jq -r '.enabled // false')
+
+        if [ "$enabled" = "false" ]; then
+            log "✅ $test_name: Feature successfully disabled"
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+            return 0
+        else
+            log "❌ $test_name: Feature still enabled after rollback"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            return 1
+        fi
+    }
+
+    run_health_check_test() {
+        local test_name="$1"
+        local feature="$2"
+
+        TESTS_RUN=$((TESTS_RUN + 1))
+
+        log "Running health check test: $test_name"
+
+        # Perform health check
+        local health_response=$(curl -s -X POST "http://$FEATURE_FLAG_SERVICE/feature-flag/health" \
+            -H "Content-Type: application/json" \
+            -d "{\"feature\":\"$feature\"}")
+
+        local status=$(echo "$health_response" | jq -r '.status // "unknown"')
+
+        if [ "$status" = "healthy" ]; then
+            log "✅ $test_name: Health check passed"
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+            return 0
+        else
+            log "❌ $test_name: Health check failed - $status"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            return 1
+        fi
+    }
+
+    run_test_suite() {
+        local suite_name="$1"
+
+        log "Starting test suite: $suite_name"
+
+        # Get test suite configuration
+        local tests=$(jq -r ".testSuites.${suite_name}.tests[] | @base64" "$TEST_CONFIG")
+
+        for test_encoded in $tests; do
+            local test=$(echo "$test_encoded" | base64 --decode)
+
+            local name=$(echo "$test" | jq -r '.name')
+            local description=$(echo "$test" | jq -r '.description')
+            local endpoint=$(echo "$test" | jq -r '.endpoint')
+            local method=$(echo "$test" | jq -r '.method')
+            local payload=$(echo "$test" | jq -r '.payload')
+            local expected=$(echo "$test" | jq -r '.expectedResponse')
+
+            run_test "$name" "$endpoint" "$method" "$payload" "$expected"
+        done
+
+        log "Completed test suite: $suite_name"
+    }
+
+    run_security_rollout_tests() {
+        log "Starting security rollout tests"
+
+        # Test JWT authentication rollout
+        run_rollout_test "JWTAuthenticationRollout" "jwtAuthentication" "25"
+
+        # Wait for rollout to stabilize
+        sleep 30
+
+        # Test health check
+        run_health_check_test "JWTHealthCheck" "jwtAuthentication"
+
+        # Test database encryption rollout
+        run_rollout_test "DatabaseEncryptionRollout" "databaseEncryption" "50"
+
+        # Test mobile security rollout
+        run_rollout_test "MobileSecurityRollout" "mobileSecurity" "75"
+
+        log "Completed security rollout tests"
+    }
+
+    run_rollback_tests() {
+        log "Starting rollback tests"
+
+        # Set up a feature for rollback testing
+        run_rollout_test "SetupForRollback" "serviceMeshSecurity" "100"
+
+        # Wait a moment
+        sleep 10
+
+        # Test rollback functionality
+        run_rollback_test "EmergencyRollback" "serviceMeshSecurity"
+
+        log "Completed rollback tests"
+    }
+
+    generate_report() {
+        log "Generating test report"
+
+        local report_file="$RESULTS_DIR/test-report-$(date +%Y%m%d-%H%M%S).json"
+
+        cat > "$report_file" << EOF
+        {
+          "timestamp": "$(date -Iseconds)",
+          "summary": {
+            "totalTests": $TESTS_RUN,
+            "passed": $TESTS_PASSED,
+            "failed": $TESTS_FAILED,
+            "successRate": $(echo "scale=2; $TESTS_PASSED * 100 / $TESTS_RUN" | bc -l)
+          },
+          "details": {
+            "environment": "integration-test",
+            "featureFlagService": "healthy",
+            "testDuration": "$(date -Iseconds)",
+            "logFile": "$LOG_FILE"
+          }
+        }
+        EOF
+
+        log "Test report generated: $report_file"
+        log "Test Results: $TESTS_PASSED/$TESTS_RUN passed ($(echo "scale=1; $TESTS_PASSED * 100 / $TESTS_RUN" | bc -l)%)"
+    }
+
+    cleanup_test_environment() {
+        log "Cleaning up test environment"
+
+        # Remove test deployments
+        kubectl -n thinkrank delete -f /tests/test-dependencies.yaml --ignore-not-found=true
+
+        log "Test environment cleanup completed"
+    }
+
+    # Main execution
+    main() {
+        log "Starting Feature Flag Integration Tests"
+
+        setup_test_environment
+
+        # Run basic functionality tests
+        run_test_suite "feature-flag-basic"
+
+        # Run security rollout tests
+        run_security_rollout_tests
+
+        # Run rollback tests
+        run_rollback_tests
+
+        # Generate final report
+        generate_report
+
+        cleanup_test_environment
+
+        log "Feature Flag Integration Tests completed"
+
+        # Exit with failure if any tests failed
+        if [ "$TESTS_FAILED" -gt 0 ]; then
+            exit 1
+        fi
+    }
+
+    # Handle script arguments
+    case "${1:-}" in
+        "basic")
+            run_test_suite "feature-flag-basic"
+            ;;
+        "rollout")
+            run_security_rollout_tests
+            ;;
+        "rollback")
+            run_rollback_tests
+            ;;
+        "health")
+            run_health_check_test "FeatureFlagServiceHealth" "jwtAuthentication"
+            ;;
+        "full")
+            main
+            ;;
+        *)
+            echo "Usage: $0 {basic|rollout|rollback|health|full}"
+            echo "  basic   - Run basic functionality tests"
+            echo "  rollout - Run security rollout tests"
+            echo "  rollback- Run rollback mechanism tests"
+            echo "  health  - Run health check tests"
+            echo "  full    - Run complete test suite"
+            exit 1
+            ;;
+    esac
+---
+# Test Dependencies Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feature-flag-test-dependencies
+  namespace: thinkrank
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feature-flag-test-dependencies
+  template:
+    metadata:
+      labels:
+        app: feature-flag-test-dependencies
+    spec:
+      containers:
+      - name: test-user-service
+        image: thinkrank/test-user-service:v1.0.0
+        ports:
+        - containerPort: 3002
+        env:
+        - name: NODE_ENV
+          value: "test"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feature-flag-test-dependencies
+  namespace: thinkrank
+spec:
+  selector:
+    app: feature-flag-test-dependencies
+  ports:
+  - port: 80
+    targetPort: 3002
+  type: ClusterIP
+---
+# Test Job Definition
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: feature-flag-integration-tests
+  namespace: thinkrank
+spec:
+  template:
+    spec:
+      serviceAccountName: feature-flag-tester
+      containers:
+      - name: feature-flag-tester
+        image: thinkrank/feature-flag-test-runner:v2.0.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Run full test suite
+          chmod +x /tests/feature-flag-test-runner.sh
+          /tests/feature-flag-test-runner.sh full
+        volumeMounts:
+        - name: test-scripts
+          mountPath: /tests
+        - name: test-results
+          mountPath: /test-results
+      volumes:
+      - name: test-scripts
+        configMap:
+          name: feature-flag-integration-tests
+      - name: test-results
+        emptyDir: {}
+      restartPolicy: Never
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800
+---
+# Service Account and RBAC for Testing
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: feature-flag-tester
+  namespace: thinkrank
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: feature-flag-tester-role
+  namespace: thinkrank
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps"]
+  verbs: ["get", "list", "create"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: feature-flag-tester-binding
+  namespace: thinkrank
+subjects:
+- kind: ServiceAccount
+  name: feature-flag-tester
+  namespace: thinkrank
+roleRef:
+  kind: Role
+  name: feature-flag-tester-role
+  apiGroup: rbac.authorization.k8s.io

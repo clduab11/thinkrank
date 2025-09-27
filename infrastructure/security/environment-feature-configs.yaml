@@ -1,0 +1,596 @@
+# Environment-specific Feature Flag Configurations for ThinkRank Security
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flag-env-configs
+  namespace: thinkrank
+data:
+  development.json: |
+    {
+      "environment": "development",
+      "version": "2.0.0-dev",
+      "lastUpdated": "2025-09-27T01:04:00Z",
+      "features": {
+        "security": {
+          "jwtAuthentication": {
+            "enabled": true,
+            "rolloutPercentage": 100,
+            "targetUsers": ["developers", "testers"],
+            "targetEnvironments": ["development"],
+            "riskLevel": "low",
+            "monitoring": {
+              "metrics": ["auth_success_rate", "jwt_token_operations"],
+              "alertThresholds": {
+                "failureRate": 0.1,
+                "latencyP95": 2000
+              }
+            }
+          },
+          "databaseEncryption": {
+            "enabled": true,
+            "rolloutPercentage": 100,
+            "targetUsers": ["all"],
+            "targetEnvironments": ["development"],
+            "riskLevel": "low",
+            "monitoring": {
+              "metrics": ["db_query_latency", "encryption_operations"],
+              "alertThresholds": {
+                "latencyIncrease": 0.5,
+                "errorRate": 0.1
+              }
+            }
+          },
+          "mobileSecurity": {
+            "enabled": true,
+            "rolloutPercentage": 100,
+            "targetUsers": ["mobile_dev_users"],
+            "targetEnvironments": ["development"],
+            "riskLevel": "low",
+            "monitoring": {
+              "metrics": ["mobile_auth_success", "biometric_success"],
+              "alertThresholds": {
+                "authFailureRate": 0.2,
+                "biometricFailureRate": 0.3
+              }
+            }
+          },
+          "serviceMeshSecurity": {
+            "enabled": false,
+            "rolloutPercentage": 0,
+            "targetUsers": [],
+            "targetEnvironments": [],
+            "riskLevel": "low"
+          }
+        }
+      },
+      "rolloutStrategies": {
+        "development": {
+          "fastRollout": {
+            "percentageIncrease": 50,
+            "intervalHours": 1,
+            "maxFailures": 5
+          }
+        }
+      }
+    }
+
+  staging.json: |
+    {
+      "environment": "staging",
+      "version": "2.0.0-staging",
+      "lastUpdated": "2025-09-27T01:04:00Z",
+      "features": {
+        "security": {
+          "jwtAuthentication": {
+            "enabled": true,
+            "rolloutPercentage": 25,
+            "targetUsers": ["beta_testers", "internal_users"],
+            "targetEnvironments": ["staging"],
+            "riskLevel": "medium",
+            "monitoring": {
+              "metrics": ["auth_success_rate", "auth_failure_rate", "jwt_token_operations"],
+              "alertThresholds": {
+                "failureRate": 0.05,
+                "latencyP95": 1000
+              }
+            }
+          },
+          "databaseEncryption": {
+            "enabled": true,
+            "rolloutPercentage": 50,
+            "targetUsers": ["premium_users"],
+            "targetEnvironments": ["staging"],
+            "riskLevel": "medium",
+            "monitoring": {
+              "metrics": ["db_query_latency", "encryption_operations", "storage_usage"],
+              "alertThresholds": {
+                "latencyIncrease": 0.2,
+                "errorRate": 0.05
+              }
+            }
+          },
+          "mobileSecurity": {
+            "enabled": true,
+            "rolloutPercentage": 30,
+            "targetUsers": ["mobile_beta_users"],
+            "targetEnvironments": ["staging"],
+            "riskLevel": "medium",
+            "monitoring": {
+              "metrics": ["mobile_auth_success", "biometric_success", "secure_storage_ops"],
+              "alertThresholds": {
+                "authFailureRate": 0.1,
+                "biometricFailureRate": 0.15
+              }
+            }
+          },
+          "serviceMeshSecurity": {
+            "enabled": true,
+            "rolloutPercentage": 20,
+            "targetUsers": ["api_beta_users"],
+            "targetEnvironments": ["staging"],
+            "riskLevel": "high",
+            "monitoring": {
+              "metrics": ["mtls_handshake_success", "service_mesh_latency"],
+              "alertThresholds": {
+                "handshakeFailureRate": 0.1,
+                "latencyIncrease": 0.2
+              }
+            }
+          }
+        }
+      },
+      "rolloutStrategies": {
+        "staging": {
+          "canary": {
+            "initialPercentage": 5,
+            "stepPercentage": 15,
+            "intervalHours": 4,
+            "successCriteria": "error_rate < 0.05"
+          }
+        }
+      }
+    }
+
+  production.json: |
+    {
+      "environment": "production",
+      "version": "2.0.0",
+      "lastUpdated": "2025-09-27T01:04:00Z",
+      "features": {
+        "security": {
+          "jwtAuthentication": {
+            "enabled": false,
+            "rolloutPercentage": 0,
+            "targetUsers": [],
+            "targetEnvironments": [],
+            "riskLevel": "high",
+            "monitoring": {
+              "metrics": ["auth_success_rate", "auth_failure_rate", "jwt_token_operations"],
+              "alertThresholds": {
+                "failureRate": 0.02,
+                "latencyP95": 800
+              }
+            }
+          },
+          "databaseEncryption": {
+            "enabled": true,
+            "rolloutPercentage": 25,
+            "targetUsers": ["premium_users"],
+            "targetEnvironments": ["production"],
+            "riskLevel": "critical",
+            "monitoring": {
+              "metrics": ["db_query_latency", "encryption_operations", "storage_usage"],
+              "alertThresholds": {
+                "latencyIncrease": 0.1,
+                "errorRate": 0.01
+              }
+            }
+          },
+          "mobileSecurity": {
+            "enabled": true,
+            "rolloutPercentage": 50,
+            "targetUsers": ["mobile_users"],
+            "targetEnvironments": ["production"],
+            "riskLevel": "medium",
+            "monitoring": {
+              "metrics": ["mobile_auth_success", "biometric_success", "secure_storage_ops"],
+              "alertThresholds": {
+                "authFailureRate": 0.05,
+                "biometricFailureRate": 0.1
+              }
+            }
+          },
+          "serviceMeshSecurity": {
+            "enabled": true,
+            "rolloutPercentage": 75,
+            "targetUsers": ["api_users"],
+            "targetEnvironments": ["production"],
+            "riskLevel": "high",
+            "monitoring": {
+              "metrics": ["mtls_handshake_success", "service_mesh_latency", "security_policy_hits"],
+              "alertThresholds": {
+                "handshakeFailureRate": 0.05,
+                "latencyIncrease": 0.1
+              }
+            }
+          }
+        }
+      },
+      "rolloutStrategies": {
+        "production": {
+          "gradual": {
+            "initialPercentage": 1,
+            "stepPercentage": 10,
+            "intervalHours": 12,
+            "successCriteria": "error_rate < 0.02 && latency_p95 < 1000ms",
+            "rollbackThreshold": "error_rate > 0.05 || latency_p95 > 2000ms"
+          }
+        }
+      }
+    }
+---
+# Mobile-specific Feature Flag Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mobile-feature-flags
+  namespace: thinkrank
+data:
+  mobile-security-config.json: |
+    {
+      "platform": "mobile",
+      "version": "2.0.0",
+      "lastUpdated": "2025-09-27T01:04:00Z",
+      "features": {
+        "authentication": {
+          "jwtMobileTokens": {
+            "enabled": false,
+            "rolloutPercentage": 0,
+            "minAppVersion": "3.0.0",
+            "deviceTypes": ["ios", "android"],
+            "securityLevel": "high"
+          },
+          "biometricAuth": {
+            "enabled": true,
+            "rolloutPercentage": 80,
+            "supportedDevices": ["ios_12_plus", "android_9_plus"],
+            "fallbackOptions": ["pin", "password"],
+            "securityLevel": "high"
+          },
+          "secureStorage": {
+            "enabled": true,
+            "rolloutPercentage": 100,
+            "encryptionAlgorithm": "AES256",
+            "keychainUsage": true,
+            "securityLevel": "critical"
+          }
+        },
+        "dataProtection": {
+          "localEncryption": {
+            "enabled": true,
+            "rolloutPercentage": 100,
+            "algorithm": "AES256_GCM",
+            "keyRotationDays": 30,
+            "securityLevel": "critical"
+          },
+          "syncEncryption": {
+            "enabled": true,
+            "rolloutPercentage": 60,
+            "endToEndEncryption": true,
+            "securityLevel": "critical"
+          }
+        },
+        "networkSecurity": {
+          "certificatePinning": {
+            "enabled": true,
+            "rolloutPercentage": 90,
+            "strictValidation": true,
+            "securityLevel": "high"
+          },
+          "tlsInspection": {
+            "enabled": false,
+            "rolloutPercentage": 0,
+            "bypassOptions": ["development", "internal_networks"],
+            "securityLevel": "medium"
+          }
+        }
+      },
+      "deviceSecurityProfiles": {
+        "high_security_devices": {
+          "minOSVersion": {"ios": "15.0", "android": "12"},
+          "requireBiometric": true,
+          "requirePin": true,
+          "jailbreakDetection": true,
+          "emulatorDetection": true
+        },
+        "standard_security_devices": {
+          "minOSVersion": {"ios": "13.0", "android": "10"},
+          "requireBiometric": false,
+          "requirePin": true,
+          "jailbreakDetection": true,
+          "emulatorDetection": false
+        },
+        "legacy_devices": {
+          "minOSVersion": {"ios": "12.0", "android": "9"},
+          "requireBiometric": false,
+          "requirePin": true,
+          "jailbreakDetection": false,
+          "emulatorDetection": false
+        }
+      }
+    }
+---
+# Service Mesh Security Integration Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-mesh-security-config
+  namespace: thinkrank
+data:
+  service-mesh-security.json: |
+    {
+      "serviceMesh": "istio",
+      "version": "2.0.0",
+      "lastUpdated": "2025-09-27T01:04:00Z",
+      "securityFeatures": {
+        "mutualTLS": {
+          "enabled": true,
+          "rolloutPercentage": 75,
+          "mode": "STRICT",
+          "excludedServices": ["legacy-api", "external-services"],
+          "monitoring": {
+            "metrics": ["mtls_connection_success", "mtls_handshake_failures"],
+            "alertThresholds": {
+              "handshakeFailureRate": 0.05,
+              "connectionFailureRate": 0.03
+            }
+          }
+        },
+        "authorizationPolicy": {
+          "enabled": true,
+          "rolloutPercentage": 60,
+          "defaultDeny": false,
+          "customPolicies": [
+            {
+              "name": "auth-service-access",
+              "action": "ALLOW",
+              "rules": [
+                {
+                  "from": [{"principals": ["cluster.local/ns/thinkrank/sa/auth-service"]}],
+                  "to": [{"principals": ["cluster.local/ns/thinkrank/sa/api-gateway"]}]
+                }
+              ]
+            }
+          ]
+        },
+        "peerAuthentication": {
+          "enabled": true,
+          "rolloutPercentage": 80,
+          "mtlsMode": "PERMISSIVE",
+          "selector": {
+            "matchLabels": {
+              "security.istio.io/tlsMode": "istio"
+            }
+          }
+        },
+        "requestAuthentication": {
+          "enabled": true,
+          "rolloutPercentage": 50,
+          "jwtRules": [
+            {
+              "issuer": "thinkrank-auth-service",
+              "jwksUri": "https://auth-service.thinkrank.svc.cluster.local:3001/.well-known/jwks.json",
+              "forwardOriginalToken": true
+            }
+          ]
+        }
+      },
+      "trafficPolicies": {
+        "rateLimiting": {
+          "enabled": true,
+          "rolloutPercentage": 90,
+          "defaultLimits": {
+            "requestsPerSecond": 100,
+            "burstLimit": 200
+          },
+          "perUserLimits": {
+            "requestsPerMinute": 1000,
+            "burstLimit": 100
+          }
+        },
+        "circuitBreaking": {
+          "enabled": true,
+          "rolloutPercentage": 85,
+          "errorThreshold": 0.05,
+          "recoveryTimeout": "30s",
+          "maxConnections": 1000
+        },
+        "retryPolicies": {
+          "enabled": true,
+          "rolloutPercentage": 70,
+          "attempts": 3,
+          "perTryTimeout": "2s",
+          "retryOn": ["5xx", "gateway-error", "connect-failure"]
+        }
+      }
+    }
+---
+# Integration Scripts for Feature Flag Management
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flag-integration-scripts
+  namespace: thinkrank
+data:
+  jwt-rollout-manager.sh: |
+    #!/bin/bash
+    # JWT Authentication Gradual Rollout Manager
+
+    FEATURE_FLAG_SERVICE="feature-flag-service.thinkrank.svc.cluster.local:80"
+    AUTH_SERVICE="auth-service.thinkrank.svc.cluster.local:3001"
+
+    log() {
+        echo "[$(date -Iseconds)] [JWT-ROLLOUT] $*"
+    }
+
+    check_jwt_health() {
+        local user_id="$1"
+
+        # Check if user can authenticate with JWT
+        local response=$(curl -s -X POST "http://$AUTH_SERVICE/auth/jwt-test" \
+            -H "Content-Type: application/json" \
+            -d "{\"userId\":\"$user_id\"}")
+
+        if echo "$response" | jq -e '.success' > /dev/null 2>&1; then
+            echo "true"
+        else
+            echo "false"
+        fi
+    }
+
+    update_jwt_rollout() {
+        local percentage="$1"
+        local reason="$2"
+
+        log "Updating JWT rollout to $percentage% - $reason"
+
+        # Update feature flag service
+        curl -s -X POST "http://$FEATURE_FLAG_SERVICE/feature-flag/set" \
+            -H "Content-Type: application/json" \
+            -d "{\"feature\":\"jwtAuthentication\",\"enabled\":true,\"rolloutPercentage\":$percentage}"
+
+        # Trigger deployment update
+        kubectl -n thinkrank patch deployment auth-service \
+            -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"feature-flag-version\":\"$(date +%s)\"}}}}}"
+
+        log "JWT rollout updated successfully"
+    }
+
+    monitor_jwt_metrics() {
+        # Check error rates
+        local error_rate=$(curl -s "http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query" \
+            --data-urlencode "query=rate(jwt_auth_failures_total[5m]) / rate(jwt_auth_attempts_total[5m])" | \
+            jq -r '.data.result[0].value[1]' 2>/dev/null || echo "0")
+
+        # Check latency
+        local latency=$(curl -s "http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query" \
+            --data-urlencode "query=histogram_quantile(0.95, rate(jwt_auth_duration_seconds_bucket[5m]))" | \
+            jq -r '.data.result[0].value[1]' 2>/dev/null || echo "0")
+
+        echo "JWT Metrics - Error Rate: $error_rate, Latency: ${latency}s"
+    }
+
+    # Main rollout logic
+    case "${1:-}" in
+        "status")
+            curl -s "http://$FEATURE_FLAG_SERVICE/feature-flag/get" \
+                -H "Content-Type: application/json" \
+                -d "{\"feature\":\"jwtAuthentication\"}"
+            ;;
+        "increase")
+            current_pct=$(curl -s "http://$FEATURE_FLAG_SERVICE/feature-flag/get" \
+                -H "Content-Type: application/json" \
+                -d "{\"feature\":\"jwtAuthentication\"}" | jq -r '.rolloutPercentage // 0')
+
+            new_pct=$((current_pct + 10))
+
+            if [ "$new_pct" -le 100 ]; then
+                # Monitor current metrics before increase
+                monitor_jwt_metrics
+
+                # Health check sample users
+                for user in user1 user2 user3; do
+                    if ! check_jwt_health "$user"; then
+                        log "Health check failed for $user, aborting rollout increase"
+                        exit 1
+                    fi
+                done
+
+                update_jwt_rollout "$new_pct" "Gradual rollout increase"
+            else
+                log "Already at 100% rollout"
+            fi
+            ;;
+        "rollback")
+            update_jwt_rollout 0 "Emergency rollback triggered"
+            ;;
+        "monitor")
+            monitor_jwt_metrics
+            ;;
+        *)
+            echo "Usage: $0 {status|increase|rollback|monitor}"
+            exit 1
+            ;;
+    esac
+---
+# Kubernetes Job for Automated Feature Flag Management
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: feature-flag-sync-job
+  namespace: thinkrank
+spec:
+  template:
+    spec:
+      serviceAccountName: feature-flag-manager
+      containers:
+      - name: feature-flag-sync
+        image: thinkrank/feature-flag-tools:v2.0.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Sync environment configurations
+          echo "🔄 Syncing feature flag configurations..."
+          kubectl -n thinkrank get configmap feature-flag-env-configs -o json | \
+            jq -r '.data.production\.json' > /tmp/production-config.json
+
+          # Update feature flag service with latest production config
+          curl -X POST http://feature-flag-service.thinkrank.svc.cluster.local:8080/config/update \
+            -H "Content-Type: application/json" \
+            -d @/tmp/production-config.json
+
+          # Validate configuration
+          curl -X POST http://feature-flag-service.thinkrank.svc.cluster.local:8080/config/validate
+
+          echo "✅ Feature flag configuration sync completed"
+        env:
+        - name: NAMESPACE
+          value: "thinkrank"
+      restartPolicy: OnFailure
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+---
+# Service Account and RBAC for Feature Flag Management
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: feature-flag-manager
+  namespace: thinkrank
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: feature-flag-manager-role
+  namespace: thinkrank
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "update"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: feature-flag-manager-binding
+  namespace: thinkrank
+subjects:
+- kind: ServiceAccount
+  name: feature-flag-manager
+  namespace: thinkrank
+roleRef:
+  kind: Role
+  name: feature-flag-manager-role
+  apiGroup: rbac.authorization.k8s.io

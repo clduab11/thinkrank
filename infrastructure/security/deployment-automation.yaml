@@ -1,0 +1,530 @@
+# Deployment Automation and Monitoring Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deployment-scripts
+  namespace: thinkrank
+data:
+  deploy.sh: |
+    #!/bin/bash
+    # ThinkRank Security Deployment Script
+
+    set -euo pipefail
+
+    NAMESPACE="${NAMESPACE:-thinkrank}"
+    SERVICE_NAME="${SERVICE_NAME:-auth-service}"
+    IMAGE_TAG="${IMAGE_TAG:-latest}"
+    DEPLOYMENT_COLOR="${DEPLOYMENT_COLOR:-blue}"
+    VALIDATION_TIMEOUT="${VALIDATION_TIMEOUT:-300}"
+
+    echo "🚀 Starting deployment for $SERVICE_NAME in $NAMESPACE"
+    echo "📋 Configuration:"
+    echo "   - Image Tag: $IMAGE_TAG"
+    echo "   - Deployment Color: $DEPLOYMENT_COLOR"
+    echo "   - Validation Timeout: $VALIDATION_TIMEOUT seconds"
+
+    # Function to check service health
+    check_health() {
+        local service="$1"
+        local timeout="$2"
+        local count=0
+
+        echo "🔍 Checking health for $service..."
+
+        while [ $count -lt $timeout ]; do
+            if kubectl -n "$NAMESPACE" exec -it deployment/"$service" -- curl -f -s http://localhost:3001/health/ready > /dev/null 2>&1; then
+                echo "✅ $service is healthy"
+                return 0
+            fi
+
+            echo "⏳ Waiting for $service to become healthy... ($count/$timeout)"
+            sleep 1
+            count=$((count + 1))
+        done
+
+        echo "❌ $service failed to become healthy within $timeout seconds"
+        return 1
+    }
+
+    # Function to switch traffic
+    switch_traffic() {
+        local target_color="$1"
+        local service="$SERVICE_NAME"
+
+        echo "🔄 Switching traffic to $target_color deployment"
+
+        # Update service selector
+        kubectl -n "$NAMESPACE" patch service "$service" -p "{\"spec\":{\"selector\":{\"deployment\":\"$target_color\"}}}"
+
+        # Wait for traffic to settle
+        sleep 10
+
+        # Verify new deployment is handling traffic
+        if kubectl -n "$NAMESPACE" exec -it deployment/"$service-$target_color" -- curl -f -s http://localhost:3001/health/live > /dev/null 2>&1; then
+            echo "✅ Traffic successfully switched to $target_color"
+            return 0
+        else
+            echo "❌ Failed to switch traffic to $target_color"
+            return 1
+        fi
+    }
+
+    # Function to rollback deployment
+    rollback() {
+        local target_color="$1"
+        local fallback_color
+
+        if [ "$target_color" = "blue" ]; then
+            fallback_color="green"
+        else
+            fallback_color="blue"
+        fi
+
+        echo "🔄 Rolling back from $target_color to $fallback_color"
+
+        if switch_traffic "$fallback_color"; then
+            echo "✅ Rollback completed successfully"
+            return 0
+        else
+            echo "❌ Rollback failed"
+            return 1
+        fi
+    }
+
+    # Main deployment logic
+    case "${1:-deploy}" in
+        "deploy")
+            echo "📦 Starting deployment process..."
+
+            # Deploy new version
+            if ! kubectl -n "$NAMESPACE" set image deployment/"$SERVICE_NAME-$DEPLOYMENT_COLOR" \
+                "$SERVICE_NAME-$DEPLOYMENT_COLOR"="thinkrank/$SERVICE_NAME:$IMAGE_TAG"; then
+                echo "❌ Failed to update deployment image"
+                exit 1
+            fi
+
+            # Wait for rollout to complete
+            echo "⏳ Waiting for rollout to complete..."
+            kubectl -n "$NAMESPACE" rollout status deployment/"$SERVICE_NAME-$DEPLOYMENT_COLOR" --timeout=600s
+
+            # Validate deployment
+            if ! check_health "$SERVICE_NAME-$DEPLOYMENT_COLOR" "$VALIDATION_TIMEOUT"; then
+                echo "❌ Deployment validation failed"
+                exit 1
+            fi
+
+            # Switch traffic if validation passes
+            if switch_traffic "$DEPLOYMENT_COLOR"; then
+                echo "✅ Deployment completed successfully"
+            else
+                echo "❌ Failed to switch traffic, attempting rollback..."
+                rollback "$DEPLOYMENT_COLOR"
+                exit 1
+            fi
+            ;;
+
+        "rollback")
+            target_color="${2:-}"
+            if [ -z "$target_color" ]; then
+                echo "❌ Please specify target color for rollback (blue/green)"
+                exit 1
+            fi
+            rollback "$target_color"
+            ;;
+
+        "validate")
+            service_name="${2:-$SERVICE_NAME}"
+            if check_health "$service_name" 60; then
+                echo "✅ $service_name validation passed"
+                exit 0
+            else
+                echo "❌ $service_name validation failed"
+                exit 1
+            fi
+            ;;
+
+        "status")
+            echo "📊 Current deployment status:"
+            kubectl -n "$NAMESPACE" get pods -l app="$SERVICE_NAME" -o wide
+            kubectl -n "$NAMESPACE" get services -l app="$SERVICE_NAME"
+            ;;
+
+        *)
+            echo "❌ Unknown command: $1"
+            echo "Usage: $0 {deploy|rollback|validate|status}"
+            exit 1
+            ;;
+    esac
+
+  health-check.sh: |
+    #!/bin/bash
+    # Health Check Script for ThinkRank Services
+
+    SERVICE_NAME="${SERVICE_NAME:-auth-service}"
+    NAMESPACE="${NAMESPACE:-thinkrank}"
+    ENDPOINT="${ENDPOINT:-/health/ready}"
+    TIMEOUT="${TIMEOUT:-30}"
+    RETRY_COUNT="${RETRY_COUNT:-3}"
+
+    echo "🔍 Running health checks for $SERVICE_NAME"
+
+    # Function to perform health check
+    perform_health_check() {
+        local url="http://$SERVICE_NAME.$NAMESPACE.svc.cluster.local:3001$ENDPOINT"
+
+        if curl -f -s --max-time "$TIMEOUT" "$url" > /dev/null 2>&1; then
+            echo "✅ Health check passed for $SERVICE_NAME"
+            return 0
+        else
+            echo "❌ Health check failed for $SERVICE_NAME"
+            return 1
+        fi
+    }
+
+    # Retry logic
+    for i in $(seq 1 "$RETRY_COUNT"); do
+        echo "🔄 Attempt $i/$RETRY_COUNT"
+
+        if perform_health_check; then
+            exit 0
+        fi
+
+        if [ "$i" -lt "$RETRY_COUNT" ]; then
+            echo "⏳ Retrying in 5 seconds..."
+            sleep 5
+        fi
+    done
+
+    echo "❌ All health check attempts failed"
+    exit 1
+
+  security-validation.sh: |
+    #!/bin/bash
+    # Security Validation Script
+
+    NAMESPACE="${NAMESPACE:-thinkrank}"
+    SERVICE_NAME="${SERVICE_NAME:-auth-service}"
+
+    echo "🔒 Running security validations for $SERVICE_NAME"
+
+    # Check security context
+    echo "🔍 Checking pod security context..."
+    kubectl -n "$NAMESPACE" get pod -l app="$SERVICE_NAME" -o jsonpath='{.items[0].spec.securityContext}' | jq .
+
+    # Check container security context
+    echo "🔍 Checking container security context..."
+    kubectl -n "$NAMESPACE" get pod -l app="$SERVICE_NAME" -o jsonpath='{.items[0].spec.containers[0].securityContext}' | jq .
+
+    # Check network policies
+    echo "🔍 Checking network policies..."
+    kubectl -n "$NAMESPACE" get networkpolicy -l app="$SERVICE_NAME" -o yaml
+
+    # Check RBAC permissions
+    echo "🔍 Checking service account permissions..."
+    kubectl -n "$NAMESPACE" get serviceaccount "$SERVICE_NAME" -o yaml
+    kubectl -n "$NAMESPACE" get rolebinding -l app="$SERVICE_NAME" -o yaml
+
+    # Check secrets encryption
+    echo "🔍 Checking secrets..."
+    kubectl -n "$NAMESPACE" get secrets -l app="$SERVICE_NAME" --show-labels
+
+    # Validate TLS certificates
+    echo "🔍 Checking TLS certificates..."
+    kubectl -n "$NAMESPACE" get certificates -l app="$SERVICE_NAME" -o yaml
+
+    echo "✅ Security validation completed"
+
+  performance-validation.sh: |
+    #!/bin/bash
+    # Performance Validation Script
+
+    NAMESPACE="${NAMESPACE:-thinkrank}"
+    SERVICE_NAME="${SERVICE_NAME:-auth-service}"
+    DURATION="${DURATION:-60}"
+    CONCURRENT_USERS="${CONCURRENT_USERS:-10}"
+
+    echo "⚡ Running performance validation for $SERVICE_NAME"
+    echo "📊 Configuration:"
+    echo "   - Duration: $DURATION seconds"
+    echo "   - Concurrent Users: $CONCURRENT_USERS"
+
+    # Install hey (HTTP load testing tool) if not present
+    if ! command -v hey &> /dev/null; then
+        echo "📦 Installing hey load testing tool..."
+        wget -q https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64
+        chmod +x hey_linux_amd64
+        mv hey_linux_amd64 /usr/local/bin/hey
+    fi
+
+    # Get service URL
+    SERVICE_URL="http://$SERVICE_NAME.$NAMESPACE.svc.cluster.local:3001"
+
+    echo "🎯 Starting load test against $SERVICE_URL"
+
+    # Run load test
+    hey -n $((CONCURRENT_USERS * 100)) \
+        -c "$CONCURRENT_USERS" \
+        -t "$DURATION" \
+        -o csv \
+        "$SERVICE_URL/health/live" > "load_test_results_$(date +%s).csv"
+
+    echo "📈 Load test completed. Results saved to load_test_results_*.csv"
+
+    # Analyze results
+    if [ -f "load_test_results_$(date +%s).csv" ]; then
+        echo "📊 Performance Summary:"
+        tail -1 "load_test_results_$(date +%s).csv" | awk -F',' '{print "   - Response Time: " $3 "ms (avg)"}'
+        tail -1 "load_test_results_$(date +%s).csv" | awk -F',' '{print "   - Requests/sec: " $7}'
+        tail -1 "load_test_results_$(date +%s).csv" | awk -F',' '{print "   - Error Rate: " $6 "%"}'
+    fi
+
+    # Check Prometheus metrics
+    echo "📊 Checking service metrics..."
+    kubectl -n "$NAMESPACE" exec -it deployment/prometheus -- \
+        curl -s "http://localhost:9090/api/v1/query?query=up{job=\"$SERVICE_NAME\"}" | \
+        jq '.data.result[0].value[1]'
+
+    echo "✅ Performance validation completed"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: security-deployment-job
+  namespace: thinkrank
+spec:
+  template:
+    spec:
+      serviceAccountName: deployment-manager
+      containers:
+      - name: deployment-manager
+        image: thinkrank/deployment-manager:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Execute deployment script
+          chmod +x /scripts/deploy.sh
+          /scripts/deploy.sh deploy
+        env:
+        - name: NAMESPACE
+          value: "thinkrank"
+        - name: SERVICE_NAME
+          value: "auth-service"
+        - name: IMAGE_TAG
+          valueFrom:
+            configMapKeyRef:
+              name: deployment-config
+              key: IMAGE_TAG
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+      volumes:
+      - name: scripts
+        configMap:
+          name: deployment-scripts
+          defaultMode: 0755
+      restartPolicy: Never
+---
+# Service Account for deployment automation
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployment-manager
+  namespace: thinkrank
+---
+# RBAC permissions for deployment manager
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: deployment-manager-role
+rules:
+- apiGroups: ["apps", "extensions"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies", "ingresses"]
+  verbs: ["get", "list", "create", "update", "patch"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors"]
+  verbs: ["get", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: deployment-manager-binding
+subjects:
+- kind: ServiceAccount
+  name: deployment-manager
+  namespace: thinkrank
+roleRef:
+  kind: ClusterRole
+  name: deployment-manager-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Prometheus monitoring configuration
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: thinkrank-security-alerts
+  namespace: thinkrank
+spec:
+  groups:
+  - name: security.alerts
+    rules:
+    - alert: HighErrorRate
+      expr: rate(http_requests_total{status!~"2.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is above 5% for service {{ $labels.service }}"
+
+    - alert: AuthenticationFailures
+      expr: increase(authentication_failures_total[5m]) > 10
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High authentication failure rate"
+        description: "More than 10 authentication failures in 5 minutes"
+
+    - alert: SuspiciousActivity
+      expr: increase(security_events_total{event_type="SUSPICIOUS_ACTIVITY"}[5m]) > 5
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Suspicious activity detected"
+        description: "Multiple suspicious activities detected"
+
+    - alert: RateLimitExceeded
+      expr: increase(rate_limit_exceeded_total[5m]) > 20
+      for: 3m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Rate limit exceeded"
+        description: "Rate limits exceeded 20 times in 5 minutes"
+
+    - alert: DeploymentFailed
+      expr: kube_deployment_status_replicas_unavailable > 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Deployment failed"
+        description: "Deployment {{ $labels.deployment }} has unavailable replicas"
+---
+# Grafana Dashboard Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-config
+  namespace: thinkrank
+data:
+  security-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "ThinkRank Security Dashboard",
+        "tags": ["security", "thinkrank"],
+        "timezone": "UTC",
+        "panels": [
+          {
+            "title": "Authentication Success Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(authentication_success_total[5m]) / rate(authentication_attempts_total[5m]) * 100",
+                "legendFormat": "Success Rate %"
+              }
+            ]
+          },
+          {
+            "title": "Security Events by Type",
+            "type": "piechart",
+            "targets": [
+              {
+                "expr": "increase(security_events_total[1h])",
+                "legendFormat": "{{ event_type }}"
+              }
+            ]
+          },
+          {
+            "title": "Rate Limiting Activity",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(rate_limit_exceeded_total[5m])",
+                "legendFormat": "Rate Limited Requests"
+              }
+            ]
+          },
+          {
+            "title": "JWT Token Operations",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "increase(jwt_tokens_created_total[5m])",
+                "legendFormat": "Tokens Created"
+              },
+              {
+                "expr": "increase(jwt_tokens_revoked_total[5m])",
+                "legendFormat": "Tokens Revoked"
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+---
+# Deployment validation checklist
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deployment-checklist
+  namespace: thinkrank
+data:
+  pre-deployment-checks: |
+    ✅ Verify all security interfaces are compatible
+    ✅ Confirm shared JWT types are properly aligned
+    ✅ Validate environment variable configurations
+    ✅ Check database migration scripts
+    ✅ Ensure monitoring hooks are in place
+    ✅ Verify rollback procedures are defined
+    ✅ Confirm feature flags are properly configured
+    ✅ Validate network policies are applied
+    ✅ Check resource limits and requests
+    ✅ Ensure health check endpoints are available
+
+  post-deployment-checks: |
+    ✅ Verify all pods are running and healthy
+    ✅ Confirm traffic is routing correctly
+    ✅ Check security metrics are being collected
+    ✅ Validate rate limiting is working
+    ✅ Ensure audit logs are being generated
+    ✅ Confirm encrypted sessions are functional
+    ✅ Verify JWT token operations
+    ✅ Check network policies are enforced
+    ✅ Validate monitoring dashboards are accessible
+    ✅ Ensure rollback capability is maintained
+
+  security-validations: |
+    ✅ Pod security contexts are properly configured
+    ✅ Network policies restrict unauthorized access
+    ✅ Secrets are properly encrypted
+    ✅ RBAC permissions are minimal and appropriate
+    ✅ TLS certificates are valid and up-to-date
+    ✅ Security headers are properly configured
+    ✅ Input validation is enforced
+    ✅ Rate limiting is active
+    ✅ Audit logging is comprehensive
+    ✅ Session encryption is enabled

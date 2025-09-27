@@ -16,13 +16,13 @@ export interface DatabaseConfig {
 // Environment-based configuration
 export const getDatabaseConfig = (): DatabaseConfig => {
   const config: DatabaseConfig = {
-    supabase_url: process.env.SUPABASE_URL || '',
-    supabase_anon_key: process.env.SUPABASE_ANON_KEY || '',
-    supabase_service_role_key: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-    connection_pool_min: parseInt(process.env.DB_POOL_MIN || '2'),
-    connection_pool_max: parseInt(process.env.DB_POOL_MAX || '10'),
-    query_timeout_ms: parseInt(process.env.DB_QUERY_TIMEOUT_MS || '30000'),
-    ssl_mode: (process.env.DB_SSL_MODE as 'require' | 'prefer' | 'disable') || 'require'
+    supabase_url: process.env['SUPABASE_URL'] || '',
+    supabase_anon_key: process.env['SUPABASE_ANON_KEY'] || '',
+    supabase_service_role_key: process.env['SUPABASE_SERVICE_ROLE_KEY'] || '',
+    connection_pool_min: parseInt(process.env['DB_POOL_MIN'] || '2'),
+    connection_pool_max: parseInt(process.env['DB_POOL_MAX'] || '10'),
+    query_timeout_ms: parseInt(process.env['DB_QUERY_TIMEOUT_MS'] || '30000'),
+    ssl_mode: (process.env['DB_SSL_MODE'] as 'require' | 'prefer' | 'disable') || 'require'
   };
 
   // Validate required configuration
