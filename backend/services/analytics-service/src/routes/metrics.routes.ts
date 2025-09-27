@@ -95,4 +95,73 @@ router.get('/health', async (req: Request, res: Response) => {
   }
 });
 
+// Get App Store metrics for ASO tracking
+router.get('/app-store', async (req: Request, res: Response) => {
+  try {
+    const { platform, startDate, endDate } = req.query;
+
+    const appStoreMetrics = await metricsCollector.getAppStoreMetrics({
+      platform: platform as string,
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined
+    });
+
+    res.status(200).json({
+      success: true,
+      data: appStoreMetrics
+    });
+  } catch (error) {
+    logger.error('Failed to get App Store metrics', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get App Store metrics'
+    });
+  }
+});
+
+// Get keyword performance metrics
+router.get('/keywords', async (req: Request, res: Response) => {
+  try {
+    const { platform, locale } = req.query;
+
+    const keywordMetrics = await metricsCollector.getKeywordMetrics({
+      platform: platform as string,
+      locale: locale as string
+    });
+
+    res.status(200).json({
+      success: true,
+      data: keywordMetrics
+    });
+  } catch (error) {
+    logger.error('Failed to get keyword metrics', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get keyword metrics'
+    });
+  }
+});
+
+// Get conversion funnel metrics
+router.get('/conversion', async (req: Request, res: Response) => {
+  try {
+    const { platform } = req.query;
+
+    const conversionMetrics = await metricsCollector.getConversionMetrics({
+      platform: platform as string
+    });
+
+    res.status(200).json({
+      success: true,
+      data: conversionMetrics
+    });
+  } catch (error) {
+    logger.error('Failed to get conversion metrics', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get conversion metrics'
+    });
+  }
+});
+
 export { router as metricsRoutes };
