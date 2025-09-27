@@ -197,7 +197,7 @@ namespace ThinkRank.Game
             };
             
             // Return appropriate number of conflicts based on complexity
-            int conflictCount = Mathf.Min(2 + floorDepth / 2, conflicts.Count);
+            int conflictCount = Mathf.Min(2 + (floorDepth / 2), conflicts.Count);
             return conflicts.GetRange(0, conflictCount);
         }
         

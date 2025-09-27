@@ -231,7 +231,7 @@ namespace ThinkRank.Game
             if (pos.x < 0 || pos.x >= size.x || pos.y < 0 || pos.y >= size.y)
                 return null;
                 
-            return grid[pos.x * size.y + pos.y];
+            return grid[(pos.x * size.y) + pos.y];
         }
         
         private List<Vector2Int> GetUnvisitedNeighbors(List<MazeCell> grid, Vector2Int size, Vector2Int pos)

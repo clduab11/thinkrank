@@ -296,7 +296,7 @@ namespace ThinkRank.Game
             // Utilitarian: Efficient, minimal, clean transformation
             return new TransformData
             {
-                position = decisionPointPosition + Vector3.down * 2, // Sink walls to create paths
+                position = decisionPointPosition + (Vector3.down * 2), // Sink walls to create paths
                 rotation = Quaternion.identity,
                 scale = new Vector3(1, 0.1f, 1) // Flatten to create efficient passage
             };
@@ -307,7 +307,7 @@ namespace ThinkRank.Game
             // Deontological: Structured, formal, rule-based transformation
             return new TransformData
             {
-                position = decisionPointPosition + Vector3.up * 0.5f, // Raise to create formal barrier
+                position = decisionPointPosition + (Vector3.up * 0.5f), // Raise to create formal barrier
                 rotation = Quaternion.identity,
                 scale = new Vector3(1.2f, 1.5f, 1.2f) // Stronger, more formal structure
             };
@@ -318,7 +318,7 @@ namespace ThinkRank.Game
             // Virtue ethics: Beautiful, harmonious transformation
             return new TransformData
             {
-                position = decisionPoint.position + Vector3.up * 0.3f,
+                position = decisionPoint.position + (Vector3.up * 0.3f),
                 rotation = Quaternion.Euler(0, 45, 0), // Elegant rotation
                 scale = new Vector3(1.3f, 1.1f, 1.3f) // Graceful expansion
             };
