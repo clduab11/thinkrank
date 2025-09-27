@@ -75,11 +75,17 @@ export class Logger {
     };
 
     if (error) {
-      entry.error = {
-        message: error.message,
-        stack: error.stack,
-        code: (error as any).code
+      const errObj: LogEntry['error'] = {
+        message: error.message
       };
+      if (error.stack) {
+        errObj.stack = error.stack;
+      }
+      const codeVal = (error as any)?.code;
+      if (typeof codeVal === 'string') {
+        errObj.code = codeVal;
+      }
+      entry.error = errObj;
     }
 
     return entry;

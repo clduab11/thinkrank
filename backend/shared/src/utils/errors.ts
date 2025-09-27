@@ -172,7 +172,7 @@ export class ErrorFormatter {
       },
       meta: {
         timestamp: new Date().toISOString(),
-        request_id: requestId,
+        ...(requestId !== undefined ? { request_id: requestId } : {}),
         version
       }
     };
@@ -194,7 +194,7 @@ export class ErrorFormatter {
       },
       meta: {
         timestamp: new Date().toISOString(),
-        request_id: requestId,
+        ...(requestId !== undefined ? { request_id: requestId } : {}),
         version
       }
     };
@@ -210,7 +210,7 @@ export class ErrorFormatter {
       },
       meta: {
         timestamp: new Date().toISOString(),
-        request_id: requestId,
+        ...(requestId !== undefined ? { request_id: requestId } : {}),
         version
       }
     };

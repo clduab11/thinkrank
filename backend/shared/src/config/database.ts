@@ -96,22 +96,33 @@ export class SupabaseClientFactory {
 
   // Get authenticated client for specific user
   public getAuthenticatedClient(accessToken: string): SupabaseClient<Database> {
-    const client = this.getClient();
-    client.auth.session = () => ({
-      access_token: accessToken,
-      refresh_token: '',
-      expires_in: 3600,
-      token_type: 'bearer',
-      user: null as any
-    });
-    return client;
+    // Create a client that forwards the provided access token via Authorization header
+    // This avoids directly mutating session (Supabase JS v2)
+    return createClient<Database>(
+      this.config.supabase_url,
+      this.config.supabase_anon_key,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        },
+        auth: {
+          autoRefreshToken: true,
+          persistSession: false
+        },
+        db: {
+          schema: 'public'
+        }
+      }
+    );
   }
 
   // Health check for database connectivity
   public async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
       const client = this.getServiceRoleClient();
-      const { data, error } = await client
+      const { error } = await client
         .from('users')
         .select('id')
         .limit(1);
@@ -235,10 +246,13 @@ export class QueryBuilder {
 
 // Database transaction helper
 export class DatabaseTransaction {
-  private supabase: SupabaseClient;
+  // kept for future transactional operations
+  // Note: Supabase doesn't directly support transactions, so this is a placeholder
+  // for potential future implementation with stored procedures or external transaction management
 
-  constructor(supabase: SupabaseClient) {
-    this.supabase = supabase;
+  constructor(_supabase: SupabaseClient) {
+    // Store for potential future use in transaction coordination
+    void _supabase;
   }
 
   // Execute multiple operations in sequence with error handling

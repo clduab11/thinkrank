@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import 'express-async-errors';
-import rateLimit from 'express-rate-limit';
+import { createRateLimitMiddleware, createDDoSProtection } from '@thinkrank/shared';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
@@ -25,7 +25,7 @@ import { subscriptionRoutes } from './routes/subscription.routes';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3004;
+const PORT = process.env.PORT || 3005;
 
 // Security middleware
 app.use(helmet());
@@ -34,13 +34,11 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // limit each IP to 1000 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
-});
-app.use(limiter);
+ // Rate limiting
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+// DDoS protection and distributed rate limiting (cluster-aware)
+app.use(createDDoSProtection(REDIS_URL));
+app.use(createRateLimitMiddleware(REDIS_URL, 'api'));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));

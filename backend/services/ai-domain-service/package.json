@@ -22,7 +22,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.16.1",
     "@supabase/supabase-js": "^2.39.1",
-    "@thinkrank/types": "file:../../shared/types",
+    "@thinkrank/shared": "^1.0.0",
     "amqplib": "^0.10.3",
     "axios": "^1.6.2",
     "cors": "^2.8.5",

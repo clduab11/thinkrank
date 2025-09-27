@@ -3,7 +3,13 @@ import { Request, Response, NextFunction } from 'express';
 import Redis from 'ioredis';
 import { Logger } from '../utils/logger';
 
-const logger = new Logger({ name: 'RateLimiter' });
+const logger = new Logger({
+  service: 'rate-limiter',
+  level: 'INFO',
+  console_enabled: true,
+  file_enabled: false,
+  structured: true
+});
 
 // Rate limiting configuration
 interface RateLimitConfig {
@@ -86,10 +92,11 @@ export class AdvancedRateLimiter {
         const isAbusive = await this.abuseDetection.checkForAbuse(req, key);
         if (isAbusive) {
           logger.warn('Abusive behavior detected', { ip: req.ip, key, userAgent: req.get('User-Agent') });
-          return res.status(429).json({
+          res.status(429).json({
             error: 'Suspicious activity detected. Please contact support.',
             code: 'ABUSE_DETECTED'
           });
+          return;
         }
 
         // Sliding window rate limiting
@@ -104,7 +111,10 @@ export class AdvancedRateLimiter {
           throw new Error('Redis pipeline execution failed');
         }
 
-        const requestCount = (results[1][1] as number) || 0;
+        const zcardResult = results[1]?.[1];
+        const requestCount = typeof zcardResult === 'number'
+          ? zcardResult
+          : parseInt(String(zcardResult ?? '0'), 10);
 
         // Check if rate limit exceeded
         if (requestCount >= config.maxRequests) {
@@ -121,11 +131,12 @@ export class AdvancedRateLimiter {
           // Add to abuse tracking
           await this.abuseDetection.recordRateLimitViolation(req, key);
 
-          return res.status(config.statusCode || 429).json({
+          res.status(config.statusCode || 429).json({
             error: config.message || 'Rate limit exceeded',
             code: 'RATE_LIMIT_EXCEEDED',
             retryAfter: Math.ceil(config.windowMs / 1000)
           });
+          return;
         }
 
         // Add rate limit headers
@@ -137,7 +148,12 @@ export class AdvancedRateLimiter {
 
         next();
       } catch (error) {
-        logger.error('Rate limiting error', { error: error.message, stack: error.stack });
+        {
+          const err = error as unknown;
+          const message = err instanceof Error ? err.message : String(err);
+          const stack = err instanceof Error ? err.stack : undefined;
+          logger.error('Rate limiting error', { error: message, stack });
+        }
         // Fail open on rate limiter errors to avoid blocking legitimate traffic
         next();
       }
@@ -184,7 +200,7 @@ class AbuseDetectionSystem {
   private async checkRepeatedRateLimitViolations(key: string): Promise<boolean> {
     const violationKey = `violations:${key}`;
     const violations = await this.redis.get(violationKey);
-    return violations && parseInt(violations) > 5;
+    return !!violations && parseInt(violations, 10) > 5;
   }
 
   private async checkRequestPatterns(req: Request): Promise<boolean> {
@@ -240,10 +256,11 @@ export class DDoSProtection {
         if (breaker && breaker.state === 'open') {
           const timeSinceLastFailure = Date.now() - breaker.lastFailure;
           if (timeSinceLastFailure < 60000) { // 1 minute circuit breaker
-            return res.status(503).json({
+            res.status(503).json({
               error: 'Service temporarily unavailable',
               code: 'CIRCUIT_BREAKER_OPEN'
             });
+            return;
           } else {
             breaker.state = 'half-open';
           }
@@ -252,10 +269,12 @@ export class DDoSProtection {
         // Monitor request patterns
         await this.monitorRequestPatterns(req);
 
-        next();
+        return next();
       } catch (error) {
-        logger.error('DDoS protection error', { error: error.message });
-        next();
+        const err = error as unknown;
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error('DDoS protection error', { error: message });
+        return next();
       }
     };
   }

@@ -254,7 +254,7 @@ export class ValidationUtils {
 
 // Custom validation decorators for classes
 export function ValidateBody(schema: Joi.ObjectSchema) {
-  return function (target: any, propertyName: string, descriptor: PropertyDescriptor) {
+  return function (_target: any, _propertyName: string, descriptor: PropertyDescriptor) {
     const method = descriptor.value;
 
     descriptor.value = function (...args: any[]) {
@@ -272,7 +272,7 @@ export function ValidateBody(schema: Joi.ObjectSchema) {
 }
 
 export function ValidateQuery(schema: Joi.ObjectSchema) {
-  return function (target: any, propertyName: string, descriptor: PropertyDescriptor) {
+  return function (_target: any, _propertyName: string, descriptor: PropertyDescriptor) {
     const method = descriptor.value;
 
     descriptor.value = function (...args: any[]) {

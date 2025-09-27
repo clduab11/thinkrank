@@ -78,3 +78,68 @@ data:
         static_configs:
           - targets: ['api-gateway:8001']
         metrics_path: '/metrics'
+       # Game Service Integration Metrics
+       - job_name: 'game-service-detailed'
+         static_configs:
+           - targets: ['game-service:3002']
+         metrics_path: '/metrics'
+         scrape_interval: 10s
+         params:
+           format: ['prometheus']
+         metric_relabel_configs:
+           - source_labels: [__name__]
+             regex: 'game_(.*)'
+             target_label: 'integration_type'
+             replacement: '${1}'
+           - source_labels: [__name__]
+             regex: 'game_.*_(.*)'
+             target_label: 'metric_category'
+             replacement: '${1}'
+
+       # Analytics Service Integration
+       - job_name: 'analytics-integration'
+         static_configs:
+           - targets: ['analytics-service:3005']
+         metrics_path: '/metrics'
+         scrape_interval: 15s
+         metric_relabel_configs:
+           - source_labels: [__name__]
+             regex: 'analytics_(.*)'
+             target_label: 'analytics_metric'
+             replacement: '${1}'
+
+       # Social Service Integration
+       - job_name: 'social-integration'
+         static_configs:
+           - targets: ['social-service:3004']
+         metrics_path: '/metrics'
+         scrape_interval: 15s
+         metric_relabel_configs:
+           - source_labels: [__name__]
+             regex: 'social_(.*)'
+             target_label: 'social_metric'
+             replacement: '${1}'
+
+       # AI Service Integration
+       - job_name: 'ai-integration'
+         static_configs:
+           - targets: ['ai-service:3003']
+         metrics_path: '/metrics'
+         scrape_interval: 10s
+         metric_relabel_configs:
+           - source_labels: [__name__]
+             regex: 'ai_(.*)'
+             target_label: 'ai_metric'
+             replacement: '${1}'
+
+       # Cross-Service Integration Monitoring
+       - job_name: 'integration-health'
+         static_configs:
+           - targets: ['game-service:3002', 'analytics-service:3005', 'social-service:3004', 'ai-service:3003']
+         metrics_path: '/health'
+         scrape_interval: 30s
+         metric_relabel_configs:
+           - source_labels: [__name__]
+             regex: 'health_(.*)'
+             target_label: 'health_component'
+             replacement: '${1}'

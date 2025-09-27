@@ -94,6 +94,114 @@ Read the full policy in the in‑app Privacy Center at launch.
 - Enterprise‑grade foundation already in place; content and live events ramping
 - Beta cohorts forming for educators, researchers, and student groups
 
+---
+
+## 🎯 Development Roadmap & Sprint Planning
+
+### Sprint 1: Foundation & Core Architecture (Weeks 1-4)
+**Focus**: Establish robust technical foundation for AAA-quality gaming experience
+
+**Key Deliverables**:
+- ✅ Microservices architecture with 60fps performance baseline
+- ✅ Cross-platform Unity client with Metal/Vulkan optimization
+- ✅ Authentication and user management system
+- ✅ Core database schema with research integration
+- ✅ Performance monitoring and analytics pipeline
+
+**Technical Highlights**:
+- Sub-200ms response times across all interactions
+- 99.9% uptime architecture with automated failover
+- Advanced memory management and asset streaming
+- Real-time multiplayer infrastructure
+
+### Sprint 2: AAA Game Engine Integration (Weeks 5-8)
+**Focus**: Implement AAA-comparable game mechanics with educational depth
+
+**Core Game Titles Preview**:
+
+#### 🎯 **Bias Hunter** (Puzzle-Adventure, Genshin Impact Quality)
+- **iOS/Android Optimization**: ARKit/Core ML integration for real-world bias detection
+- **Gameplay**: Shadow of the Colossus-style boss battles against AI bias manifestations
+- **Educational Integration**: Each defeated bias unlocks research contribution opportunities
+- **Visual Fidelity**: Horizon Forbidden West-level graphics with dynamic bias visualization
+
+#### 🧠 **Mind Maze** (Rogue-like Puzzle, Hades meets The Witness)
+- **iOS/Android Optimization**: SceneKit/Metal performance optimization for complex 3D puzzles
+- **Gameplay**: Procedurally generated AI ethics challenges with permanent progression
+- **Educational Integration**: Each floor represents different AI research domains
+- **Visual Fidelity**: Monument Valley-inspired architecture with neural network visualizations
+
+#### ⚡ **QuickScope AI** (Competitive Shooter, Valorant meets Counter-Strike)
+- **iOS/Android Optimization**: Vulkan/Metal API optimization for 120fps competitive gameplay
+- **Gameplay**: Fast-paced bias detection matches with ranking and tournaments
+- **Educational Integration**: Real-time AI evaluation challenges during matches
+- **Visual Fidelity**: Rainbow Six Siege-level tactical environments with AI behavior simulation
+
+#### 🌐 **Echo Chamber** (Social Strategy, Among Us meets Civilization)
+- **iOS/Android Optimization**: Unity DOTS for massive multiplayer social simulation
+- **Gameplay**: Build and defend digital societies from AI misinformation
+- **Educational Integration**: Community-driven research validation and consensus building
+- **Visual Fidelity**: Cities: Skylines-style city building with information flow visualization
+
+#### 🔮 **Oracle's Trial** (RPG Adventure, Zelda meets Final Fantasy)
+- **iOS/Android Optimization**: Advanced shader pipeline for magical AI effects
+- **Gameplay**: Epic quest to master AI literacy across multiple realms
+- **Educational Integration**: Each realm focuses on different AI research areas
+- **Visual Fidelity**: Breath of the Wild-level open world with dynamic AI ecosystem
+
+### Sprint 3: Research Integration & Polish (Weeks 9-12)
+**Focus**: Deep integration of cutting-edge AI research with game mechanics
+
+**Research Partnerships**:
+- Stanford HAI: Human-AI alignment challenges
+- MIT CSAIL: Advanced bias detection scenarios
+- Google DeepMind: Safety and ethics integration
+- OpenAI: Alignment and value learning systems
+
+**Advanced Features**:
+- Real-time research problem distribution
+- Player contribution quality validation
+- Dynamic difficulty adjustment based on research needs
+- Cross-platform save synchronization
+
+### Sprint 4: Launch Preparation & Beta (Weeks 13-16)
+**Focus**: Polish, optimization, and launch readiness
+
+**Beta Testing Phases**:
+- Internal testing: Performance and stability validation
+- Closed beta: Research institution partners
+- Open beta: Educational institution testing
+- Soft launch: Gradual market introduction
+
+**Launch Targets**:
+- 60fps consistent performance on iPhone 12+/Galaxy S21+
+- <200ms response times for all interactions
+- Zero-downtime deployment architecture
+- Comprehensive accessibility features
+
+---
+
+## 📊 Sprint Metrics & Success Criteria
+
+### Performance Benchmarks
+- **Frame Rate**: 60fps minimum, 120fps target on high-end devices
+- **Load Times**: <3s app startup, <1s level transitions
+- **Memory Usage**: <500MB baseline, <1GB during intensive gameplay
+- **Network**: <200ms API responses, <50ms real-time features
+
+### Educational Impact Metrics
+- **Learning Progression**: Measurable AI literacy improvement
+- **Research Quality**: 85%+ expert validation of player contributions
+- **Engagement**: 15+ minutes average session length
+- **Retention**: 70% day-7 retention, 40% day-30 retention
+
+### Technical Excellence Standards
+- **Crash Rate**: <0.1% across all platforms
+- **Accessibility**: WCAG 2.1 AA compliance
+- **Localization**: 15+ language support
+- **Platform Optimization**: Apple App Store and Google Play feature parity
+
+---
 Join early access: hello@parallax-ai.app
 
 ---
