@@ -6,6 +6,8 @@
 [![Download on Google Play](https://img.shields.io/badge/Google_Play-Coming_Soon-black.svg)](https://play.google.com)
 [![Website](https://img.shields.io/badge/Website-Parallax_AI-blue.svg)](https://parallax-ai.app)
 
+<img width="1024" height="1280" alt="VeniceAI_FKX8lEx" src="https://github.com/user-attachments/assets/f214c350-a96f-4eba-9c08-7c0cda6db626" />
+
 > Learn to outsmart AI—by playing. ThinkRank transforms advanced AI concepts into viral, bite-sized challenges that feel like a game and level up your real-world AI literacy while contributing to cutting-edge research.
 
 [🎯 Learn More](https://parallax-ai.app) • [📱 Coming Soon to App Stores](#) • [🎞️ Watch Demo](#) • [👥 Join Research Community](https://parallax-ai.app)
