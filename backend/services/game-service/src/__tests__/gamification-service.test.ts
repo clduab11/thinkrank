@@ -10,9 +10,7 @@ import {
   calculatePointsDetailed,
   calculatePointsWithDecay,
   GamificationService,
-  DEFAULT_SCORING_CONFIG,
-  ChallengeResult,
-  ScoringResult
+  ChallengeResult
 } from '../services/gamification-service';
 
 describe('GamificationService - Point Calculation', () => {

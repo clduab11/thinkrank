@@ -11,9 +11,14 @@
  */
 
 import { z, ZodSchema } from 'zod';
-import { Logger } from './logger';
 
-const logger = Logger.getInstance('json-parser');
+// Default logger implementation using console
+const logger = {
+  info: (...args: any[]) => console.info('[json-parser]', ...args),
+  warn: (...args: any[]) => console.warn('[json-parser]', ...args),
+  error: (...args: any[]) => console.error('[json-parser]', ...args),
+  debug: (...args: any[]) => console.debug('[json-parser]', ...args),
+};
 
 export interface ParseOptions {
   /** Fallback value if parsing fails */

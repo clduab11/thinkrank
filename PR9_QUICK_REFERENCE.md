@@ -1,7 +1,7 @@
 # PR #9 Quick Reference Guide
 
 **Last Updated:** 2025-11-16
-**Deadline:** Nov 18, 11:59 PM CST (App Store Launch)
+**Deadline:** 2025-11-18, 11:59 PM CST (App Store Launch)
 **Branch:** `claude/resolve-pr9-launch-01Qoi7se3KmWkugvd634NYhZ`
 
 ---

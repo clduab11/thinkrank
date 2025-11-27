@@ -9,8 +9,7 @@ import {
   MockDataGenerator,
   createMockDataGenerator,
   mockDataGenerator,
-  SeededRandom,
-  LeaderboardEntry
+  SeededRandom
 } from '../mock-data-generator';
 
 describe('MockDataGenerator', () => {

@@ -9,7 +9,6 @@ import {
   sanitizeMCPToolArgs,
   sanitizeMCPResponse,
   MCP_SENSITIVE_FIELDS,
-  MCP_SANITIZATION_CONFIG,
   mcpLoggingMiddleware,
   createLoggingContext,
   logToolInvocation,

@@ -322,9 +322,17 @@ export class SafeRedisClient {
   async existsPattern(pattern: string): Promise<boolean> {
     let cursor = '0';
 
-    const [nextCursor, batch] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 10);
+    do {
+      const [nextCursor, batch] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
 
-    return batch.length > 0;
+      if (batch.length > 0) {
+        return true;
+      }
+
+      cursor = nextCursor;
+    } while (cursor !== '0');
+
+    return false;
   }
 
   /**

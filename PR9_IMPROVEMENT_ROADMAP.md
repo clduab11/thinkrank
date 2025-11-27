@@ -2,7 +2,7 @@
 
 **Status:** Changes Requested
 **Created:** 2025-11-16
-**Priority:** CRITICAL - App Store Launch Deadline: Nov 18, 11:59 PM CST
+**Priority:** CRITICAL - App Store Launch Deadline: 2025-11-18, 11:59 PM CST
 **Branch:** `claude/resolve-pr9-launch-01Qoi7se3KmWkugvd634NYhZ`
 
 ---
