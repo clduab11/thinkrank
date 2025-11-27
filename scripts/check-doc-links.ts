@@ -77,7 +77,7 @@ async function checkMarkdownFiles(): Promise<BrokenLink[]> {
       MARKDOWN_LINK_REGEX.lastIndex = 0;
 
       while ((match = MARKDOWN_LINK_REGEX.exec(line)) !== null) {
-        const [, text, link] = match;
+        const [, , link] = match;
 
         if (!checkPathExists(file, link)) {
           brokenLinks.push({

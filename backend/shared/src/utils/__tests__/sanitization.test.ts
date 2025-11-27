@@ -11,8 +11,7 @@ import {
   redactPIIFromString,
   createSanitizer,
   sanitizeBatch,
-  DEFAULT_SENSITIVE_FIELDS,
-  DEFAULT_CONFIG
+  DEFAULT_SENSITIVE_FIELDS
 } from '../sanitization';
 
 describe('PII Sanitization Utils', () => {

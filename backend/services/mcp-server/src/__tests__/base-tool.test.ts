@@ -5,7 +5,7 @@
  * @see Issue #6: MAJOR - MCP Server Sensitive Data Logging
  */
 
-import { BaseMCPTool, ExampleTool, ToolExecutionResult } from '../tools/base-tool';
+import { BaseMCPTool, ExampleTool } from '../tools/base-tool';
 
 // Test implementation of BaseMCPTool
 class TestTool extends BaseMCPTool<{ message: string }, { result: string }> {

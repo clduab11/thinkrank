@@ -10,7 +10,6 @@
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 import { glob } from 'glob';
 
 interface CommentIssue {

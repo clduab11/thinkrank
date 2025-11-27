@@ -161,7 +161,7 @@ export function redactPIIFromString(text: string, redactionText: string = '[REDA
   let sanitized = text;
 
   // Apply each PII pattern
-  for (const [type, pattern] of Object.entries(PII_PATTERNS)) {
+  for (const pattern of Object.values(PII_PATTERNS)) {
     pattern.lastIndex = 0;
     sanitized = sanitized.replace(pattern, redactionText);
   }
